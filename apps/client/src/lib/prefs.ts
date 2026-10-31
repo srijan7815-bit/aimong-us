@@ -10,7 +10,9 @@ export interface Prefs {
 const KEY = 'aimong.prefs.v1';
 
 function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  return (
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  );
 }
 
 const defaults = (): Prefs => ({

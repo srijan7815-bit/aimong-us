@@ -62,6 +62,8 @@ describe('config', () => {
   });
 
   it('fails loudly on garbage instead of booting half-configured', () => {
-    expect(() => loadConfig({ PORT: 'not-a-port' } as unknown as NodeJS.ProcessEnv)).toThrow(/Invalid environment/);
+    expect(() => loadConfig({ PORT: 'not-a-port' } as unknown as NodeJS.ProcessEnv)).toThrow(
+      /Invalid environment/,
+    );
   });
 });

@@ -96,7 +96,10 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
   errorNode.style.display = 'none';
 
   function currentCode(): string {
-    return boxes.map((b) => b.value).join('').toUpperCase();
+    return boxes
+      .map((b) => b.value)
+      .join('')
+      .toUpperCase();
   }
 
   const createBtn = el('button', {
@@ -234,7 +237,10 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
     el('div', { class: 'card stack' }, [
       el('div', { class: 'field' }, [el('p', { class: 'label', text: 'Your name' }), nameInput]),
       createBtn,
-      el('p', { class: 'hint', text: 'You get a room code to share. Friends tap the link, type the code, done.' }),
+      el('p', {
+        class: 'hint',
+        text: 'You get a room code to share. Friends tap the link, type the code, done.',
+      }),
     ]),
 
     el('div', { class: 'card stack' }, [

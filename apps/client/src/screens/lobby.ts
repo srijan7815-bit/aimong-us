@@ -109,17 +109,10 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     if (p.isAi) chips.push(el('span', { class: 'chip chip-ai', text: 'AI' }));
     else if (p.ready) chips.push(el('span', { class: 'chip chip-ready', text: 'Ready' }));
 
-    const card = el(
-      'div',
-      { class: `player${isYou ? ' you' : ''}${p.connected ? '' : ' offline'}` },
-      [
-        el('div', { html: podSvg({ color: p.color, size: 'sm', dim: !p.connected }) }),
-        el('div', {}, [
-          el('div', { class: 'pname', text: p.name }),
-          el('div', { class: 'pmeta' }, chips),
-        ]),
-      ],
-    );
+    const card = el('div', { class: `player${isYou ? ' you' : ''}${p.connected ? '' : ' offline'}` }, [
+      el('div', { html: podSvg({ color: p.color, size: 'sm', dim: !p.connected }) }),
+      el('div', {}, [el('div', { class: 'pname', text: p.name }), el('div', { class: 'pmeta' }, chips)]),
+    ]);
     if (isHostView && !isYou && !p.isAi) {
       card.append(
         el('button', {
@@ -171,7 +164,10 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
       cb.onSettings(apply(next));
     }
     const node = el('div', { class: 'setting' }, [
-      el('div', {}, [el('div', { class: 'setting-name', text: label }), el('div', { class: 'setting-sub', text: sub })]),
+      el('div', {}, [
+        el('div', { class: 'setting-name', text: label }),
+        el('div', { class: 'setting-sub', text: sub }),
+      ]),
       el('div', { class: 'stepper' }, [minus, valueNode, plus]),
     ]);
     return {
@@ -362,10 +358,7 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
       el('div', {}, [el('p', { class: 'label', text: 'Station code' }), codeText]),
       el('div', { class: 'stack' }, [copyBtn, shareBtn]),
     ]),
-    el('div', { class: 'card' }, [
-      el('p', { class: 'label', text: 'Crew on board' }),
-      playersGrid,
-    ]),
+    el('div', { class: 'card' }, [el('p', { class: 'label', text: 'Crew on board' }), playersGrid]),
     aiCard,
     settingsCard,
     el('div', { class: 'card' }, [
@@ -422,7 +415,16 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     taskStepper.sync(next.settings);
     costStepper.sync(next.settings);
     revealToggle.setAttribute('aria-checked', String(next.settings.revealEjectedRole));
-    for (const s of [seatsStepper, aiStepper, impStepper, discussStepper, voteStepper, killStepper, taskStepper, costStepper]) {
+    for (const s of [
+      seatsStepper,
+      aiStepper,
+      impStepper,
+      discussStepper,
+      voteStepper,
+      killStepper,
+      taskStepper,
+      costStepper,
+    ]) {
       s.setEnabled(isHost);
     }
     revealToggle.disabled = !isHost;

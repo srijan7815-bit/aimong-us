@@ -56,20 +56,30 @@ function openSheet(title: string, body: HTMLElement[]): void {
 
 function helpSheet(): void {
   openSheet('How to play', [
-    el('div', { class: 'banner banner-info', text: `${MILESTONE} build: the lobby is live. Movement, tasks, killings and meetings land in the next milestones — there is no fake "start" button.` }),
+    el('div', {
+      class: 'banner banner-info',
+      text: `${MILESTONE} build: the lobby is live. Movement, tasks, killings and meetings land in the next milestones — there is no fake "start" button.`,
+    }),
     el('ul', {}, [
       el('li', { text: 'One person taps Create room and gets a 5-letter code.' }),
       el('li', { text: 'Everyone else types the code (or opens the shared link) on their phone.' }),
       el('li', { text: 'The host picks seats, AI count, timers and the AI cost cap, then launches.' }),
-      el('li', { text: 'Official rules of the genre: crew do tasks, impostors kill and lie, meetings vote someone into space.' }),
-      el('li', { text: 'AIs only know what they could see on screen — no cheating, and their model names stay hidden until the end.' }),
+      el('li', {
+        text: 'Official rules of the genre: crew do tasks, impostors kill and lie, meetings vote someone into space.',
+      }),
+      el('li', {
+        text: 'AIs only know what they could see on screen — no cheating, and their model names stay hidden until the end.',
+      }),
     ]),
     el('div', { class: 'divider' }),
     el('div', { class: 'stock stack' }, [
       el('div', { class: 'setting' }, [
         el('div', {}, [
           el('div', { class: 'setting-name', text: 'Haptics' }),
-          el('div', { class: 'setting-sub', text: haptics.supported() ? 'Android vibration feedback' : 'not supported on this browser' }),
+          el('div', {
+            class: 'setting-sub',
+            text: haptics.supported() ? 'Android vibration feedback' : 'not supported on this browser',
+          }),
         ]),
         el('button', {
           class: 'toggle',
@@ -87,7 +97,10 @@ function helpSheet(): void {
         }),
       ]),
     ]),
-    el('div', { class: 'footer-note', text: `${APP_NAME} · ${STATION_NAME} · v${SHARED_VERSION} ${MILESTONE}` }),
+    el('div', {
+      class: 'footer-note',
+      text: `${APP_NAME} · ${STATION_NAME} · v${SHARED_VERSION} ${MILESTONE}`,
+    }),
   ]);
 }
 

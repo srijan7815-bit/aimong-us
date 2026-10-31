@@ -67,21 +67,25 @@ export function readConfigJson<T>(file: string, validate: (v: unknown) => T): T 
   return validate(JSON.parse(readFileSync(full, 'utf8')));
 }
 
-const gameDefaultsSchema = z.object({
-  players: z.object({ min: z.number(), max: z.number(), default: z.number() }),
-  room: z.object({
-    codeLength: z.number(),
-    codeAlphabet: z.string(),
-    maxRooms: z.number(),
-    emptyCloseMin: z.number(),
-  }),
-  ai: z.object({
-    maxCostUsdPerGame: z.number(),
-    brainBaseIntervalSec: z.number(),
-    maxMsgsPerMeeting: z.number(),
-    maxChars: z.number(),
-  }).passthrough(),
-}).passthrough();
+const gameDefaultsSchema = z
+  .object({
+    players: z.object({ min: z.number(), max: z.number(), default: z.number() }),
+    room: z.object({
+      codeLength: z.number(),
+      codeAlphabet: z.string(),
+      maxRooms: z.number(),
+      emptyCloseMin: z.number(),
+    }),
+    ai: z
+      .object({
+        maxCostUsdPerGame: z.number(),
+        brainBaseIntervalSec: z.number(),
+        maxMsgsPerMeeting: z.number(),
+        maxChars: z.number(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 export type GameDefaults = z.infer<typeof gameDefaultsSchema>;
 

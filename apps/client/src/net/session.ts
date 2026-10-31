@@ -152,7 +152,10 @@ export class Session {
       players,
       chat: [...(state.chat as unknown as ChatRow[])].map((c) => ({ ...c })),
     };
-    this.handlers?.onState(view, players.find((p) => p.id === this.selfId));
+    this.handlers?.onState(
+      view,
+      players.find((p) => p.id === this.selfId),
+    );
   }
 
   send(type: string, payload: unknown = {}): void {

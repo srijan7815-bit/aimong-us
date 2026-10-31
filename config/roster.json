@@ -1,13 +1,45 @@
 {
   "_note": "Fill model ids and prices from each provider's docs at build time. Seat->model mapping is secret until the post-game reveal.",
   "models": [
-    {"id":"fast-1","provider":"openrouter","model":"REPLACE_FAST_MODEL","tier":"fast","maxConcurrent":4,"costPer1kIn":0.0001,"costPer1kOut":0.0004},
-    {"id":"smart-1","provider":"openrouter","model":"REPLACE_SMART_MODEL","tier":"smart","maxConcurrent":3,"costPer1kIn":0.003,"costPer1kOut":0.015},
-    {"id":"smart-2","provider":"nvidia","model":"REPLACE_NVIDIA_MODEL","tier":"smart","maxConcurrent":3,"costPer1kIn":0.0,"costPer1kOut":0.0},
-    {"id":"smart-3","provider":"groq","model":"REPLACE_GROQ_MODEL","tier":"smart","maxConcurrent":3,"costPer1kIn":0.0005,"costPer1kOut":0.001}
+    {
+      "id": "fast-1",
+      "provider": "openrouter",
+      "model": "REPLACE_FAST_MODEL",
+      "tier": "fast",
+      "maxConcurrent": 4,
+      "costPer1kIn": 0.0001,
+      "costPer1kOut": 0.0004
+    },
+    {
+      "id": "smart-1",
+      "provider": "openrouter",
+      "model": "REPLACE_SMART_MODEL",
+      "tier": "smart",
+      "maxConcurrent": 3,
+      "costPer1kIn": 0.003,
+      "costPer1kOut": 0.015
+    },
+    {
+      "id": "smart-2",
+      "provider": "nvidia",
+      "model": "REPLACE_NVIDIA_MODEL",
+      "tier": "smart",
+      "maxConcurrent": 3,
+      "costPer1kIn": 0.0,
+      "costPer1kOut": 0.0
+    },
+    {
+      "id": "smart-3",
+      "provider": "groq",
+      "model": "REPLACE_GROQ_MODEL",
+      "tier": "smart",
+      "maxConcurrent": 3,
+      "costPer1kIn": 0.0005,
+      "costPer1kOut": 0.001
+    }
   ],
-  "routing": {"play":"fast","meeting":"smart","vote":"smart"},
+  "routing": { "play": "fast", "meeting": "smart", "vote": "smart" },
   "fallbackModel": "fast-1",
   "seatAssignment": "shuffle-models-per-game",
-  "temperature": {"play":0.7,"meeting":0.95}
+  "temperature": { "play": 0.7, "meeting": 0.95 }
 }

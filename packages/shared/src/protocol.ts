@@ -16,13 +16,13 @@ export const MAX_CHAT_LEN = 160;
  */
 export const PlayerName = z
   .string()
-  .transform((s) => s.replace(/[<>{}\\]/g, '').replace(/\s+/g, ' ').trim())
-  .pipe(
-    z
-      .string()
-      .min(1, 'Pick a name')
-      .max(MAX_NAME_LEN, `Keep it under ${MAX_NAME_LEN} characters`),
-  );
+  .transform((s) =>
+    s
+      .replace(/[<>{}\\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+  .pipe(z.string().min(1, 'Pick a name').max(MAX_NAME_LEN, `Keep it under ${MAX_NAME_LEN} characters`));
 
 /** Chat text: no angle brackets, so <chat> boundaries in prompts stay unforgeable. */
 export const ChatText = z

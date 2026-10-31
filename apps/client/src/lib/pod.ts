@@ -13,13 +13,13 @@ const SYMBOL_PATHS: Record<PlayerColor['symbol'], (x: number, y: number, c: stri
   diamond: (x, y, c) => `<path d="M${x} ${y - 3}L${x + 3} ${y}L${x} ${y + 3}L${x - 3} ${y}Z" fill="${c}"/>`,
   star: (x, y, c) =>
     `<path d="M${x} ${y - 3.2}l.95 2.05 2.25.25-1.65 1.5.45 2.2L${x} ${y + 1.9}l-2.05 1.1.45-2.2-1.65-1.5 2.25-.25z" fill="${c}"/>`,
-  cross: (x, y, c) =>
-    `<path d="M${x - 1} ${y - 3}h2v2h2v2h-2v2h-2v-2h-2v-2h2z" fill="${c}"/>`,
+  cross: (x, y, c) => `<path d="M${x - 1} ${y - 3}h2v2h2v2h-2v2h-2v-2h-2v-2h2z" fill="${c}"/>`,
   ring: (x, y, c) => `<circle cx="${x}" cy="${y}" r="2.7" fill="none" stroke="${c}" stroke-width="1.6"/>`,
   half: (x, y, c) => `<path d="M${x - 2.8} ${y}a2.8 2.8 0 0 1 5.6 0z" fill="${c}"/>`,
   bar: (x, y, c) => `<rect x="${x - 3}" y="${y - 1}" width="6" height="2.2" rx="1.1" fill="${c}"/>`,
   dot: (x, y, c) => `<circle cx="${x}" cy="${y}" r="1.7" fill="${c}"/>`,
-  chevron: (x, y, c) => `<path d="M${x - 2.8} ${y + 1.6}L${x} ${y - 1.8}L${x + 2.8} ${y + 1.6}" stroke="${c}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
+  chevron: (x, y, c) =>
+    `<path d="M${x - 2.8} ${y + 1.6}L${x} ${y - 1.8}L${x + 2.8} ${y + 1.6}" stroke="${c}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
   hex: (x, y, c) => `<path d="M${x} ${y - 3}l2.6 1.5v3L${x} ${y + 3}l-2.6-1.5v-3z" fill="${c}"/>`,
 };
 

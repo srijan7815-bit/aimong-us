@@ -10,7 +10,19 @@ export interface PlayerColor {
   name: string;
   hex: string;
   /** Shape drawn on the antenna tip; unique per colour. */
-  symbol: 'circle' | 'triangle' | 'square' | 'diamond' | 'star' | 'cross' | 'ring' | 'half' | 'bar' | 'dot' | 'chevron' | 'hex';
+  symbol:
+    | 'circle'
+    | 'triangle'
+    | 'square'
+    | 'diamond'
+    | 'star'
+    | 'cross'
+    | 'ring'
+    | 'half'
+    | 'bar'
+    | 'dot'
+    | 'chevron'
+    | 'hex';
 }
 
 export const PLAYER_COLORS: readonly PlayerColor[] = [

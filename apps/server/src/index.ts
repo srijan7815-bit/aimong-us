@@ -91,7 +91,8 @@ export async function main(): Promise<void> {
         index: 'index.html',
         setHeaders: (res, path) => {
           // Hashed assets are immutable; the shell must always revalidate.
-          if (path.includes('/assets/')) res.setHeader('cache-control', 'public, max-age=31536000, immutable');
+          if (path.includes('/assets/'))
+            res.setHeader('cache-control', 'public, max-age=31536000, immutable');
           else res.setHeader('cache-control', 'no-cache');
         },
       }),

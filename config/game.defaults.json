@@ -1,17 +1,31 @@
 {
-  "players": {"min":5,"max":12,"default":10},
-  "impostors": {"5-7":1,"8-12":2},
-  "visionTiles": {"crew":5,"impostor":7,"lightsOut":1.5},
-  "killCooldownSec": 25, "killRangeTiles": 1.5,
-  "tasksPerCrew": 5, "emergencyPerPlayer": 1,
-  "discussionSec": 60, "votingSec": 30,
-  "tickHz": 20, "snapshotHz": 12,
+  "players": { "min": 5, "max": 12, "default": 10 },
+  "impostors": { "5-7": 1, "8-12": 2 },
+  "visionTiles": { "crew": 5, "impostor": 7, "lightsOut": 1.5 },
+  "killCooldownSec": 25,
+  "killRangeTiles": 1.5,
+  "tasksPerCrew": 5,
+  "emergencyPerPlayer": 1,
+  "discussionSec": 60,
+  "votingSec": 30,
+  "tickHz": 20,
+  "snapshotHz": 12,
   "ai": {
-    "brainBaseIntervalSec": 3, "brainMinGapSec": 1.5, "taskIntervalSec": 6,
-    "maxMsgsPerMeeting": 6, "maxChars": 160,
-    "typingMsPerChar": [40, 60], "mentionReplyDelayMs": [1500, 5000],
-    "timeoutSec": {"play": 8, "meeting": 15},
-    "maxCostUsdPerGame": 1.0, "downgradeAtPct": 80
+    "brainBaseIntervalSec": 3,
+    "brainMinGapSec": 1.5,
+    "taskIntervalSec": 6,
+    "maxMsgsPerMeeting": 6,
+    "maxChars": 160,
+    "typingMsPerChar": [40, 60],
+    "mentionReplyDelayMs": [1500, 5000],
+    "timeoutSec": { "play": 8, "meeting": 15 },
+    "maxCostUsdPerGame": 1.0,
+    "downgradeAtPct": 80
   },
-  "room": {"codeLength": 5, "codeAlphabet": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", "maxRooms": 3, "emptyCloseMin": 5}
+  "room": {
+    "codeLength": 5,
+    "codeAlphabet": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+    "maxRooms": 3,
+    "emptyCloseMin": 5
+  }
 }
