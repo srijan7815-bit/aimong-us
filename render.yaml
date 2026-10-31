@@ -1,0 +1,42 @@
+services:
+  # One web service: Node serves the built Phaser/Vite client over static files
+  # and the Colyseus WebSocket endpoint on the same port. Game state is in
+  # memory, so this must stay at exactly ONE instance.
+  - type: web
+    name: aimong-us
+    runtime: node
+    region: singapore            # closest Render region to India; change if your group is elsewhere
+    plan: starter                # free tier sleeps after ~15 min idle and cold-starts slowly
+    buildCommand: corepack enable && corepack prepare pnpm@12.16.1 --activate && pnpm install --frozen-lockfile && pnpm -r build
+    startCommand: node apps/server/dist/index.js
+    healthCheckPath: /healthz
+    numInstances: 1
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: PUBLIC_URL
+        sync: false             # paste your Render URL once the service exists
+      - key: LOG_LEVEL
+        value: info
+      - key: MAX_ROOMS
+        value: "3"
+      - key: MAX_COST_USD_PER_GAME
+        value: "1.00"
+      - key: MAX_LLM_CONCURRENCY
+        value: "6"
+      - key: LLM_MOCK
+        value: "0"
+      - key: ADMIN_TOKEN
+        sync: false             # optional; protects /admin (arrives in M5)
+      # --- LLM providers: paste these in the Render dashboard, never in git ---
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

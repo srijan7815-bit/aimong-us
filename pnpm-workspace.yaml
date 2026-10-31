@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+minimumReleaseAgeExclude:
+  - "@colyseus/sdk@0.18.9"
