@@ -1,7 +1,7 @@
 {
   "name": "aimong-us",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "packageManager": "pnpm@12.16.1",
   "engines": {
     "node": ">=22 <23"
@@ -16,7 +16,10 @@
     "test": "pnpm -r test",
     "pretest": "pnpm --filter @aimong/shared build",
     "sim": "pnpm --filter @aimong/server sim",
-    "icons": "python3 scripts/gen-icons.py"
+    "icons": "python3 scripts/gen-icons.py",
+    "map": "node scripts/gen-map.mjs",
+    "atlas": "python3 scripts/gen-atlas.py",
+    "assets": "pnpm icons && pnpm map && pnpm atlas"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
