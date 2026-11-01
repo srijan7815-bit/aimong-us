@@ -48,6 +48,7 @@ pnpm dev        # Vite on :5173 (proxies to the API/WebSocket on :2567) + server
 | `pnpm --filter @aimong/server sim` | headless simulation harness (arrives M4) |
 | `node --import tsx apps/server/scripts/smoke.ts` | scripted 2-client lobby test against a running server |
 | `pnpm -r build` | production build |
+| `npx playwright install chromium && node scripts/m35-client-test.mjs` | browser test (Playwright is not a repo dependency: Render's build must stay lean) |
 
 ## Host a game in 5 steps
 
