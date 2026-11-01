@@ -1,0 +1,18 @@
+{
+  "name": "aimong-us-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Native Android shell for AImong Us (Capacitor). Not part of the pnpm workspace: it is built on demand by scripts/build-apk.sh or GitHub Actions.",
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "apk": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

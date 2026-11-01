@@ -10,6 +10,7 @@ import { el } from '../lib/dom.js';
 import { podSvg } from '../lib/pod.js';
 import { haptics } from '../lib/haptics.js';
 import type { LobbyView, PlayerRow, SettingsRow } from '../net/session.js';
+import { shareBase } from '../net/endpoint.js';
 
 export interface LobbyCallbacks {
   onLeave: () => void;
@@ -74,7 +75,7 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
 
   function inviteText(): string {
     const code = view?.code ?? '';
-    return `Join me on AImong Us — station ${code}\n${location.origin}/?code=${code}`;
+    return `Join me on AImong Us — station ${code}\n${shareBase()}/?code=${code}`;
   }
 
   async function copyCode(): Promise<void> {

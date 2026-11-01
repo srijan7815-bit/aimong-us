@@ -11,6 +11,8 @@
  *     of failing.
  */
 
+import { apiUrl } from '../net/endpoint.js';
+
 export type WakePhase = 'checking' | 'cold-start' | 'ready' | 'failed';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -110,7 +112,7 @@ export async function ensureServerAwake(
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch('/healthz', { signal: controller.signal, cache: 'no-store' });
+      const res = await fetch(apiUrl('/healthz'), { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timer);
       if (res.ok) {
         const body = (await res.json()) as { ok?: boolean };

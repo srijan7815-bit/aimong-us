@@ -97,3 +97,43 @@ explicitly decide lives here (INSTRUCTIONS §0.2).
     creates/reuses the GitHub repo, pushes `main`, creates/reuses the Render
     service, and waits for `/healthz`. Runs only with tokens the owner supplies;
     no secret is ever written to disk.
+
+## 2026-11-01 — M1.5: native shell, the Commons, and how they are numbered
+
+**Owner-inserted milestone, numbered M1.5.** The owner asked for a native Android
+app and a persistent AI "cluster home" before gameplay exists. PLAN.md's M2–M7 keep
+their numbers; this work is M1.5 so the locked order in the task list (docs read in
+order, milestones in order) stays intact.
+
+**Native delivery = Capacitor WebView shell, not a Kotlin client.** PLAN §2 locks the
+client to TypeScript + Phaser; a WebView keeps one UI codebase and still gives a real
+installed app (own icon, splash, no address bar, own storage). The distinction that
+matters to the owner — "played in a native app, not a browser tab" — is met. A
+Kotlin/Compose port would fork the UI and cost several milestones.
+
+**`mobile/` sits outside the pnpm workspace.** Android builds need a JDK and SDK that
+game developers should not need to run `pnpm dev`. `mobile/` has its own
+`package.json`; CI and `scripts/build-apk.sh` build it on demand.
+
+**Residents are server-side, not per-room.** The Commons holds them between games so
+"message all of them" is possible at all. A per-room bot cannot answer when no room
+exists. Cross-game memory (M6) will replace the in-memory feed with a durable store.
+
+**No fake voices.** With no LLM provider key, the console says "no voice connected
+yet" and the feed shows a system line. Fabricating resident replies would break the
+"no fabricated functionality" rule that already makes `start` refuse.
+
+**`CONSOLE_KEY` unset = open console, loudly.** A fresh deploy has no key, and the
+owner must be able to reach their cluster without a round trip through me. The page
+prints a red banner in that case and `/api/console/*` stays open. Set
+`CONSOLE_KEY` in Render → Environment to lock it; the key is compared in constant
+time and stored only in the browser's localStorage. Cheap to flip, documented in
+`DEPLOY.md`.
+
+**Team codes are validated against live rooms.** Dispatching to a code that has no
+live room returns 404 with a plain-language message instead of silently marking
+residents `in-game` somewhere that does not exist.
+
+**APK is debug-signed and published as a GitHub Release / CI artifact.** No Play
+Store account, no signing keys to lose. Android requires the "install unknown apps"
+toggle; `DEPLOY.md` walks through it.

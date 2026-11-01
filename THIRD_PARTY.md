@@ -64,3 +64,16 @@ LLM calls go to OpenRouter / NVIDIA NIM / Groq under the owner's own accounts an
 their terms. The free NVIDIA tier is documented for testing/evaluation, which
 matches this private build. No user content is sent anywhere except the in-game
 observations of AI seats.
+
+## Android shell (M1.5)
+
+| Component | Version | Licence | Use |
+|---|---|---|---|
+| Capacitor (`@capacitor/core`, `@capacitor/cli`, `@capacitor/android`) | 7.6.x | MIT | Native Android wrapper around the bundled client |
+| Capacitor Splash Screen plugin (`app.capacitorjs.plugins.splash`) | 7.x | MIT | Launch screen |
+| Temurin JDK | 21 | GPLv2 + Classpath Exception | Build-time only, not shipped |
+| Android SDK platform 35 / build-tools 34 / platform-tools | — | Android SDK licence | Build-time only |
+
+Icons, splash screens and the launcher mark are generated from the repo's own
+pod-bot vector by `scripts/gen-android-assets.py` — no third-party art. The APK
+contains only our code, our assets and the above MIT libraries.

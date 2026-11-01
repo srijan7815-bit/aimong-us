@@ -19,6 +19,7 @@ import { setLogger, logger } from './logger-instance.js';
 import { registry } from './registry.js';
 import { GameRoom } from './rooms/GameRoom.js';
 import { RateLimiter } from './http/ratelimit.js';
+import { CONSOLE_HTML, createConsoleRouter } from './http/console.js';
 
 /**
  * Colyseus 0.18 checks `client.readyState !== WebSocket.OPEN` inside its
@@ -76,6 +77,12 @@ export async function main(): Promise<void> {
       return;
     }
     res.json(room);
+  });
+
+  // Owner console: the doorway to the AI cluster's home ground.
+  app.use('/api/console', createConsoleRouter());
+  app.get('/console', (_req, res) => {
+    res.type('html').setHeader('cache-control', 'no-cache').send(CONSOLE_HTML);
   });
 
   app.get('/api/rooms', (_req, res) => {

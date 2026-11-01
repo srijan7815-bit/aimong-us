@@ -7,6 +7,7 @@
  */
 import { Client, type Room } from '@colyseus/sdk';
 import { clearReconnect, loadReconnect, saveReconnect } from '../lib/prefs.js';
+import { apiUrl, serverWsUrl } from './endpoint.js';
 
 export interface Notice {
   level: 'info' | 'warn' | 'error';
@@ -68,12 +69,9 @@ export interface SessionHandlers {
 }
 
 function endpoint(): string {
-  // Same-origin by default: in production the server serves this bundle, and in
-  // dev Vite proxies the Colyseus routes (see vite.config.ts).
-  const override = import.meta.env.VITE_SERVER_URL as string | undefined;
-  if (override) return override.replace(/^http/, 'ws');
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}`;
+  // Same-origin in the browser (Vite proxies in dev, the Node server serves the
+  // bundle in production). In the native Android shell this is the Render URL.
+  return serverWsUrl();
 }
 
 export class Session {
@@ -95,7 +93,7 @@ export class Session {
   }
 
   async joinByCode(code: string, name: string): Promise<void> {
-    const res = await fetch(`/api/rooms/${encodeURIComponent(code)}`);
+    const res = await fetch(apiUrl(`/api/rooms/${encodeURIComponent(code)}`));
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error ?? 'No station with that code');

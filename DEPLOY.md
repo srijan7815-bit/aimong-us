@@ -100,3 +100,37 @@ reload. Nothing to reinstall.
 | Phone shows a stale version | Close the installed app completely and reopen (service worker updates). |
 | Lobby full / "station at capacity" | `MAX_ROOMS=3` by default; raise it in env. Each room can host 12 seats. |
 | Connection drops mid-game | Phones on mobile data lose sockets; the app reconnects within 60 s and restores the seat. |
+
+## Install the Android app (side-load, no Play Store)
+
+1. Get the APK: `docs/app/aimong-us-0.1.2.apk` in this repo, or the `aimong-us-apk`
+   artifact from the latest **android-apk** GitHub Actions run.
+2. Open the file on the phone. Android will ask to allow installs from that app —
+   allow it, then tap Install.
+3. Launch **AImong Us**. The app is a native shell around the bundled client and
+   talks only to `https://aimong-us.onrender.com`; nothing needs configuring.
+4. Cold start after the free Render plan has slept shows "Waking up the station…"
+   for 30–60 s. That is the server waking, not the app hanging.
+
+Building it yourself:
+
+```bash
+export JAVA_HOME=/path/to/jdk-21 ANDROID_HOME=/path/to/android-sdk
+cd mobile && npm install
+cd .. && SERVER_URL=https://aimong-us.onrender.com bash scripts/build-apk.sh
+# -> docs/app/aimong-us-<version>.apk (+ .sha256)
+```
+
+## The owner console (the Commons)
+
+Open `https://aimong-us.onrender.com/console` on any device.
+
+1. **Message the house** — type, hit Broadcast. Delivered to every resident.
+2. **Team code** — create a room in the app, copy its 5-letter code, paste it here,
+   choose how many residents to send, add an optional note, hit Send. They take
+   seats in that lobby, badged AI, and come home when the room closes.
+
+To lock the console against strangers: Render → **aimong-us** → Environment →
+add `CONSOLE_KEY` = a long random string → save (the service redeploys). The page
+then asks for that key once and keeps it in your browser only. Without it the
+console works but shows a red "this page is open to anyone" banner.

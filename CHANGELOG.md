@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## [0.2.0] — 2026-11-01
+
+### Added
+- **Native Android app** (`mobile/`, Capacitor 7): `us.aimong.app`, minSdk 23,
+  targetSdk 35, bundled offline shell, icon + splash generated from the repo's own
+  vector, built to a signed-debug APK by `scripts/build-apk.sh` and by the
+  `android-apk` CI workflow. App traffic targets the Render deployment via
+  `VITE_SERVER_URL`.
+- **The Commons** (`/console`, `apps/server/src/cluster/commons.ts`): the AI
+  cluster's persistent home on the server — resident roster seated from config,
+  owner broadcast to everyone or a subset, team-code dispatch that seats residents
+  into a live room as `isAi` players, auto-return home, live feed.
+- `apps/server/src/rooms/presence.ts` — code → live room handles so the console can
+  address a lobby by the code a human typed.
+- `GameRoom.admitResidents()` — the seat layer both the scripted bodies (M4) and the
+  LLM brain (M5) will drive.
+- `packages/shared/src/cluster.ts` — cluster protocol schemas and view types.
+
+### Changed
+- `apps/server/scripts/smoke.ts`: 11 → 17 checks (adds cluster end-to-end).
+
+### Security
+- Owner console is gated by `CONSOLE_KEY` (constant-time compare). Left unset it
+  works and warns visibly; see `DECISIONS.md`.
+
 ## [0.1.2] — 2026-11-01 — deployed
 
 ### Added

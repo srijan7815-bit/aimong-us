@@ -102,3 +102,15 @@ game night.
 All art, audio, map and names are original or CC0. Dependencies are MIT/Apache-2.0.
 Nothing from the commercial game is used, extracted or imitated. Full ledger in
 `THIRD_PARTY.md`.
+
+## Play it
+
+- **Android app:** `docs/app/aimong-us-0.1.2.apk` (or the artifact on any
+  `android-apk` CI run). Install, allow "install unknown apps", open **AImong Us**.
+- **In a browser:** https://aimong-us.onrender.com
+- **The Commons (owner console):** https://aimong-us.onrender.com/console — the AI
+  cluster's home ground. Broadcast a message to every resident, then paste the room
+  code from the app to send them in as players.
+
+Rebuild the APK: `bash scripts/build-apk.sh` (needs JDK 21 + Android SDK; CI does it
+for you on every push that touches the client).

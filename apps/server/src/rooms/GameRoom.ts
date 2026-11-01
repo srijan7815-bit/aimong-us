@@ -20,6 +20,8 @@ import {
   type LobbySettingsPatch,
 } from '@aimong/shared';
 import { registry } from '../registry.js';
+import { commons } from '../cluster/commons.js';
+import { registerRoom, unregisterRoom } from './presence.js';
 import { ChatEntryState, LobbyState, MAX_CHAT_HISTORY, PlayerState } from './state.js';
 import { RateLimiter } from '../http/ratelimit.js';
 import { getAppConfig } from '../app-config.js';
@@ -37,7 +39,8 @@ interface JoinAuth {
 }
 
 export class GameRoom extends Room<{ state: LobbyState }> {
-  private code = '';
+  /** Public so the Commons and the console can address this room by its code. */
+  code = '';
 
   override onCreate(): void {
     const cfg = getAppConfig();
@@ -78,6 +81,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     });
 
     this.registerHandlers();
+    registerRoom(this);
     logger.info({ roomId: this.roomId, code: this.code }, 'room created');
   }
 
@@ -159,7 +163,56 @@ export class GameRoom extends Room<{ state: LobbyState }> {
 
   override onDispose(): void {
     registry.remove(this.code);
+    unregisterRoom(this.code);
+    commons.releaseRoom(this.code);
     logger.info({ code: this.code }, 'room disposed');
+  }
+
+  // ------------------------------------------------------- AI cluster seats
+
+  /**
+   * Seat residents from the Commons (they were sent here with the team code).
+   * This is the *seat* half of an AI player: name, colour, AI badge. Movement,
+   * tasks, chat and the brain arrive in M4/M5 on top of these seats.
+   */
+  admitResidents(residents: Array<{ id: string; name: string }>): string[] {
+    if (this.state.phase !== 'LOBBY') return [];
+    const seated: string[] = [];
+    for (const resident of residents) {
+      const id = `ai:${resident.id}`;
+      if (this.state.players.has(id)) {
+        seated.push(id);
+        continue;
+      }
+      if (this.state.players.size >= this.maxClients) break;
+      const taken = [...this.state.players.values()].map((p) => p.color);
+      const color = pickFreeColor(taken);
+      const player = new PlayerState();
+      player.id = id;
+      player.name = this.uniqueName(resident.name);
+      player.color = color.id;
+      player.colorName = color.name;
+      player.isAi = true;
+      player.isHost = false;
+      player.ready = true;
+      player.connected = true;
+      player.joinedAt = Date.now();
+      this.state.players.set(id, player);
+      seated.push(id);
+      this.systemMessage(`${player.name} (AI) took a seat`);
+    }
+    if (seated.length > 0) {
+      // Real residents now occupy seats, so the AI seat counter would double-count.
+      const aiSeated = [...this.state.players.values()].filter((p) => p.isAi).length;
+      this.state.settings.aiSeats = Math.max(0, this.state.settings.aiSeats - aiSeated);
+      this.touchRegistry();
+    }
+    return seated;
+  }
+
+  /** True when at least one resident (AI seat) is at the table. */
+  hasAiSeats(): boolean {
+    return [...this.state.players.values()].some((p) => p.isAi);
   }
 
   // ---------------------------------------------------------------- messages
