@@ -23,7 +23,7 @@ that Render URL.
    see `{"ok":true,...,"rooms":0}`.
 
 **Option 2 — manual.** New + → Web Service → repo → Runtime **Node** →
-Build `corepack enable && corepack prepare pnpm@12.16.1 --activate && pnpm install --frozen-lockfile && pnpm -r build`
+Build `npm i -g pnpm@12.16.1 && pnpm install --frozen-lockfile && pnpm -r build`
 → Start `node apps/server/dist/index.js` → Health check path `/healthz` →
 Instance count **1** (never scale: game state is in memory) → Node version **22**.
 

@@ -29,7 +29,7 @@ const PLAN = env.RENDER_PLAN?.trim() || 'free';
 const SERVICE_NAME = env.RENDER_NAME?.trim() || 'aimong-us';
 
 const BUILD_CMD =
-  'corepack enable && corepack prepare pnpm@12.16.1 --activate && pnpm install --frozen-lockfile && pnpm -r build';
+  'npm i -g pnpm@12.16.1 && pnpm install --frozen-lockfile && pnpm -r build';
 const START_CMD = 'node apps/server/dist/index.js';
 
 const log = (...args) => console.log('•', ...args);

@@ -9,7 +9,7 @@ services:
     plan: free                   # no card needed; sleeps after ~15 min idle (the app has a
                                  # "waking up the station" screen + auto-retry for that).
                                  # Switch to "starter" in the dashboard for game night.
-    buildCommand: corepack enable && corepack prepare pnpm@12.16.1 --activate && pnpm install --frozen-lockfile && pnpm -r build
+    buildCommand: npm i -g pnpm@12.16.1 && pnpm install --frozen-lockfile && pnpm -r build
     startCommand: node apps/server/dist/index.js
     healthCheckPath: /healthz
     numInstances: 1
