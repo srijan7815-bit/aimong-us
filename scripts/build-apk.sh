@@ -46,6 +46,9 @@ grep -n "versionCode\|versionName" android/app/build.gradle | head -3
 echo "▸ gradle assembleDebug (JDK ${JAVA_HOME:-system})"
 cd android
 echo "sdk.dir=$ANDROID_HOME" > local.properties
+# Git does not always carry the executable bit (it did not here), and a
+# non-executable gradlew fails the whole build with exit 126.
+chmod +x ./gradlew
 ./gradlew --no-daemon assembleDebug
 
 APK=app/build/outputs/apk/debug/app-debug.apk
