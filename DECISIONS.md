@@ -322,3 +322,8 @@ can see into the page.
     `intent.target` is honoured only when it names a seat the model could legally
     act on; everything structural (walking, cooldowns, kill range, task
     presence) stays deterministic. A hallucinating brain cannot break a rule.
+32. **One retry on a failed model call.** On the free NIM tier we watched bursts of
+    `404` with an empty body for a model that had answered a second earlier.
+    A single retry after 400 ms covers the transient case; after that the seat
+    stays quiet for that tick. A silent resident is better than a hung match, and
+    the failure is visible in the console's `failed` counter.

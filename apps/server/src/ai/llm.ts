@@ -188,6 +188,22 @@ export class LlmGateway {
 
     this.inFlight++;
     const started = Date.now();
+    // NIM occasionally answers 404 with an empty body for a model that worked a
+    // second ago (observed in bursts on the free tier). One retry, then give up:
+    // a resident that stays quiet for one tick is better than a hung match.
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const reply = await this.attempt(provider, call, started);
+        if (reply) return reply;
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+      }
+      return null;
+    } finally {
+      this.inFlight--;
+    }
+  }
+
+  private async attempt(provider: Provider, call: LlmCall, started: number): Promise<LlmReply | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Number(process.env.LLM_TIMEOUT_MS || 20_000));
     try {
@@ -246,7 +262,6 @@ export class LlmGateway {
       return null;
     } finally {
       clearTimeout(timeout);
-      this.inFlight--;
     }
   }
 }
