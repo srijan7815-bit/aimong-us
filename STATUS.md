@@ -1,6 +1,12 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M1 complete (+ installable PWA), M2 next**
+Last updated: 2026-11-01 · Milestone: **M1 COMPLETE and LIVE · next: M2**
+
+> **Live app: https://aimong-us.onrender.com** (Render free plan, singapore,
+> service `srv-dbjag6oae00c73dlkek0`, repo `github.com/srijan7815-bit/aimong-us`)
+> Verified on the public URL: `/healthz` ok, manifest + icons + service worker
+> served, installable, offline shell, cold-start recovery, two devices joined the
+> same lobby by code — 12/12 PWA checks passing against production.
 
 ## Done
 
@@ -45,9 +51,10 @@ Last updated: 2026-11-01 · Milestone: **M1 complete (+ installable PWA), M2 nex
 
 ## Known issues / gaps (honest list)
 
-- **Not deployed to Render yet** — needs the owner's GitHub/Render access
-  (blueprint path documented in `DEPLOY.md`, or hand me tokens and I do it).
-  `scripts/deploy-render.mjs` is written but has never run against the real API.
+- **Deployed** (free plan): the instance sleeps after ~15 min idle, so the first
+  open of the night takes 30–60 s behind the "waking up the station" screen.
+- `PUBLIC_URL` env is not set on Render (it is only used in logs). Harmless.
+- The GitHub token used for the first deploy should be revoked by the owner.
 - Install prompt only appears for real browsers over HTTPS with
   `beforeinstallprompt`; on desktop headless it is simulated in tests. The
   "Install" card falls back to written instructions when the browser does not

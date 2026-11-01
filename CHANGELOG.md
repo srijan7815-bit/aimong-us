@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [0.1.2] — 2026-11-01 — deployed
+
+### Added
+- Live deployment: https://aimong-us.onrender.com (Render, free plan, one
+  instance, singapore) behind `render.yaml`; repo `srijan7815-bit/aimong-us`.
+- Verified against production: health, manifest/icons/SW, installability, offline
+  shell, cold-start recovery, two devices in one lobby by code (12/12 checks).
+
+### Fixed
+- Invite links (`/?code=XXXXX`) and app shortcuts applied before the home screen
+  existed on slow cold starts; now applied after mount.
+
 ## [0.1.1] — 2026-11-01 — installable phone app
 
 ### Added

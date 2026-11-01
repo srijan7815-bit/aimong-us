@@ -1,5 +1,7 @@
 # AImong Us
 
+**Live: https://aimong-us.onrender.com** — open it on your phone, tap Install.
+
 A private, browser-based social-deduction game where you and your friends play
 alongside AI players that have their own names, personalities and (later) their
 own underlying models. Friends-only: no accounts, no matchmaking, just a 5-letter
