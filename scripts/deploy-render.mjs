@@ -113,8 +113,16 @@ if (existing.ok) {
 // ---------------------------------------------------------------- 2. push
 
 const git = (args, opts = {}) => execFileSync('git', args, { stdio: 'pipe', encoding: 'utf8', ...opts });
+/** git command whose failure is not interesting (e.g. removing a remote that is not set). */
+const gitQuiet = (args) => {
+  try {
+    return execFileSync('git', args, { stdio: 'pipe', encoding: 'utf8' });
+  } catch {
+    return '';
+  }
+};
 log('pushing main…');
-git(['remote', 'remove', 'origin'], { stdio: 'ignore' });
+gitQuiet(['remote', 'remove', 'origin']);
 git(['remote', 'add', 'origin', repoUrl]);
 if (git(['branch', '--list', 'main']).trim() === '') git(['branch', '-M', 'main']);
 // Plain HTTPS push with the token in an env-backed credential helper so it never

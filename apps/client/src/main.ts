@@ -4,7 +4,7 @@
  * this file stays the place where "which screen am I on" is decided.
  */
 import './styles.css';
-import { APP_NAME, MILESTONE, SHARED_VERSION, STATION_NAME } from '@aimong/shared';
+import { APP_NAME, MILESTONE, SHARED_VERSION, STATION_NAME, isValidCode, normalizeCode } from '@aimong/shared';
 import { el, mount } from './lib/dom.js';
 import { haptics } from './lib/haptics.js';
 import { loadPrefs, savePrefs, loadReconnect, type Prefs } from './lib/prefs.js';
@@ -236,6 +236,7 @@ function showHome(message?: string): void {
     },
   });
   mount(root, home.node);
+  applyDeepLink();
   home.setInstall({ available: installAvailable, installed: isStandalone() });
   home.setServerState(serverReady, retryMessage ?? null);
   home.setBusy(!serverReady, serverReady ? undefined : 'Waking up…');
@@ -292,23 +293,27 @@ session.setHandlers({
 //   /?code=ABCDE     -> prefill the join boxes
 //   /?action=create  -> home-screen "Create" shortcut
 //   /?action=join    -> home-screen "Join" shortcut
+// These are applied *after* the home screen mounts: the boot sequence can take
+// seconds on a cold Render instance, long after the initial script ran.
 const params = new URLSearchParams(location.search);
-const action = params.get('action');
-if (action) {
-  setTimeout(() => {
-    if (action === 'create') document.querySelector<HTMLInputElement>('input.input[placeholder="Your name"]')?.focus();
-    if (action === 'join') document.querySelector<HTMLInputElement>('.code-box')?.focus();
-  }, 120);
-}
-const deepCode = params.get('code')?.toUpperCase() ?? '';
-if (deepCode && /^[A-Z0-9]{5}$/.test(deepCode)) {
-  setTimeout(() => {
+const deepCode = normalizeCode(params.get('code') ?? '');
+const shortcutAction = params.get('action');
+
+function applyDeepLink(): void {
+  if (deepCode && isValidCode(deepCode)) {
     document.querySelectorAll<HTMLInputElement>('.code-box').forEach((box, i) => {
       const ch = deepCode[i] ?? '';
       box.value = ch;
       box.classList.toggle('filled', ch.length > 0);
     });
-  }, 30);
+  }
+  const target =
+    shortcutAction === 'join' || deepCode
+      ? document.querySelector<HTMLInputElement>('.code-box')
+      : shortcutAction === 'create'
+        ? document.querySelector<HTMLInputElement>('input.input[placeholder="Your name"]')
+        : null;
+  target?.focus({ preventScroll: true });
 }
 
 // ------------------------------------------------------------------ bootstrap
