@@ -283,3 +283,11 @@ can see into the page.
 25. **Tier 2 is deferred, not dropped.** Noisemaker, Tracker, Phantom, the
     detective role, a second map with ladders/moving platforms and map selection
     stay on the schedule before M7, as the owner's expansion ordered.
+26. **The committed lockfile is pnpm 12.16.1's own output.** Render's build runs
+    `npm i -g pnpm@12.16.1 && pnpm install --frozen-lockfile`, and pnpm 12 refuses
+    a lockfile that does not record its *own* `packageManagerDependencies`
+    (`ERR_PNPM_FROZEN_LOCKFILE_WITH_OUTDATED_LOCKFILE`) — even though a pnpm 9
+    install is happy with it. Regenerate with pnpm 12.16.1
+    (`npm i -g pnpm@12.16.1 && pnpm install`), never with the sandbox's pnpm 9,
+    or the Render deploy fails at the install step. Playwright stays out of the
+    repo for the same reason: its install step downloads browsers.
