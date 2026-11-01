@@ -25,6 +25,13 @@ Last updated: 2026-11-01 · Milestone: **M4/M5-lite (residents with bodies + NIM
 - **Fog-legal observation:** only what `canSeeAnywhere` allows, plus the seat's
   own ledger; strict JSON decisions (`thought`/`say`/`intent`) or the seat does
   not act; duplicate lines are filtered room-wide.
+- **VERIFIED LIVE** on `https://aimong-us.onrender.com` after the auto-deploy of
+  `abf5c76`: `/healthz` = `M4 / 0.6.0` with `brain: nvidia:nvidia/nemotron-3.5-bolt-e4b`;
+  console snapshot `brainOnline:true`, all 12 residents `voiceReady:true`; the
+  owner's message got three real NIM answers in the panel (3 calls, 1018 tokens,
+  last call 1.46 s); the live gameplay harness passed **11/11** with **44 LLM
+  calls** — including `zaraa: dima you're the imposter` and
+  `Dima: luna what exactly did you see there`.
 - **Measured (local, real NIM key):** `ai-playthrough` **11/11** — 7 residents
   seated via the console, 7/7 walked out of spawn, tasks credited, a kill, a
   report, a meeting, votes cast, 8 speakers, **48 LLM calls**. Example chat heard
