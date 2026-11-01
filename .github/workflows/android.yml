@@ -13,6 +13,9 @@ on:
       - '.github/workflows/android.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -33,10 +36,18 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;34.0.0"
+      # The runner image already ships an Android SDK. `android-actions/setup-android@v3`
+      # used to work here but now dies on `sdkmanager tools`: that package was removed
+      # from the SDK repository, so the action exits 1 before anything is built.
+      - name: Android SDK packages
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)"
+          echo "using $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;34.0.0"
 
       - run: pnpm install --frozen-lockfile
 
@@ -52,6 +63,19 @@ jobs:
             docs/app/*.apk
             docs/app/*.sha256
           retention-days: 90
+
+      # A stable download link for the phone: the workflow run's artifact needs a
+      # GitHub login, a release asset does not.
+      - name: Attach the APK to the android-latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=android-latest
+          gh release view "$TAG" > /dev/null 2>&1 || \
+            gh release create "$TAG" --title "AImong Us — latest Android build" \
+              --notes "Built automatically from main by .github/workflows/android.yml."
+          gh release upload "$TAG" docs/app/*.apk docs/app/*.sha256 --clobber
 
       - name: Summary
         run: |

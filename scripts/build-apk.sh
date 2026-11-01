@@ -35,6 +35,14 @@ cd mobile
 if [ ! -d node_modules ]; then npm install --silent; fi
 npx cap sync android
 
+echo "▸ stamping version ${VERSION} into the manifest"
+# Keep the app's versionCode/versionName tied to package.json so a phone update
+# always accepts the new build (versionCode must rise). 0.5.0 -> 500.
+VERSION_CODE="$(node -e "const v=require('$ROOT/package.json').version.split('.').map(Number);console.log(v[0]*10000+v[1]*100+(v[2]||0))")"
+sed -i.bak -E "s/versionCode [0-9]+/versionCode ${VERSION_CODE}/; s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" android/app/build.gradle
+rm -f android/app/build.gradle.bak
+grep -n "versionCode\|versionName" android/app/build.gradle | head -3
+
 echo "▸ gradle assembleDebug (JDK ${JAVA_HOME:-system})"
 cd android
 echo "sdk.dir=$ANDROID_HOME" > local.properties
