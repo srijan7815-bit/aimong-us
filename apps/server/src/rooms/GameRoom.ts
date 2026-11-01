@@ -475,22 +475,22 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     this.onMessage('taskDone', (client, raw) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !this.canAct(player)) {
-        logger.warn({ session: client.sessionId, phase: this.state.phase }, 'taskDone refused: cannot act');
+        logger.debug({ session: client.sessionId, phase: this.state.phase }, 'taskDone refused: cannot act');
         return;
       }
       if (this.roles.get(player.id) !== 'crew') {
-        logger.warn({ player: player.name }, 'taskDone refused: not crew');
+        logger.debug({ player: player.name }, 'taskDone refused: not crew');
         return;
       }
       const msg = ClientMessages.taskDone.safeParse(raw);
       if (!msg.success) {
-        logger.warn({ raw }, 'taskDone refused: bad payload');
+        logger.debug({ raw }, 'taskDone refused: bad payload');
         return;
       }
       const list = this.tasks.get(player.id) ?? [];
       const task = list.find((t) => t.id === msg.data.taskId);
       if (!task || task.done) {
-        logger.warn({ player: player.name, taskId: msg.data.taskId, tasks: list.map((t) => t.id) }, 'taskDone refused: no such task');
+        logger.debug({ player: player.name, taskId: msg.data.taskId }, 'taskDone refused: no such task');
         return;
       }
       const spot = WORLD.taskSpots.find((s) => s.id === task.spotId);
@@ -499,7 +499,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       const sx = spot.tile.x * 32 + 16;
       const sy = spot.tile.y * 32 + 16;
       if (Math.hypot(player.x - sx, player.y - sy) > 56) {
-        logger.warn(
+        logger.debug(
           { player: player.name, spot: spot.id, dist: Math.round(Math.hypot(player.x - sx, player.y - sy)) },
           'taskDone refused: too far',
         );
@@ -511,7 +511,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       // The task list is private, so the client only learns about the tick when
       // the server re-sends 'you'. Without this the HUD stays at 0/5 forever.
       this.sendSecret(player.id);
-      logger.info({ player: player.name, spot: spot.id }, 'task done');
+      logger.debug({ player: player.name, spot: spot.id }, 'task done');
       this.checkWinNow();
     });
 
@@ -664,9 +664,8 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       );
       return;
     }
-    // M2 launches a movement preview: everyone walks the station with no roles,
-    // no tasks and no kills yet. M3 turns this into a real match. The notice says
-    // exactly that rather than pretending the game has started.
+    // M3+: roles, tasks and the whole rulebook. Anyone who cannot play yet
+    // (a lone host, a lobby under five seats) is told so instead of launched.
     this.startMatch();
   }
 
