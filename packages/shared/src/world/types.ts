@@ -19,6 +19,8 @@ export const SIM_HZ = 20;
 export const SIM_STEP_MS = 1000 / SIM_HZ;
 /** Joystick deadzone (fraction of full deflection). */
 export const INPUT_DEADZONE = 0.12;
+/** How long a door lockdown keeps the doors shut, in seconds. */
+export const DOOR_LOCK_SEC = 12;
 
 export interface Rect {
   x: number;
@@ -58,6 +60,11 @@ export interface TaskSpotDef {
   tile: TilePoint;
 }
 
+export interface DoorDef {
+  id: string;
+  rect: Rect;
+}
+
 export interface SpawnDef {
   id: string;
   tile: TilePoint;
@@ -72,6 +79,7 @@ export interface WorldMap {
   ascii: string[];
   rooms: RoomDef[];
   roomGraph: RoomNode[];
+  doors: DoorDef[];
   vents: VentDef[];
   taskSpots: TaskSpotDef[];
   spawns: SpawnDef[];

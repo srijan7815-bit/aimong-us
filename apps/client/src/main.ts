@@ -72,7 +72,7 @@ function helpSheet(): void {
   openSheet('How to play', [
     el('div', {
       class: 'banner banner-info',
-      text: `${MILESTONE} build: the lobby is live. Movement, tasks, killings and meetings land in the next milestones — there is no fake "start" button.`,
+      text: `${MILESTONE} build: roles, tasks, kills, bodies, reports, meetings, voting, ghosts, vents and sabotage are all live. AI players are still stand-in bodies until M4 gives them a brain.`,
     }),
     el('ul', {}, [
       el('li', { text: 'One person taps Create room and gets a 5-letter code.' }),
@@ -270,16 +270,28 @@ function showPlay(view: LobbyView): void {
   lobby = null;
   const bridge = {
     selfId: () => session.selfId,
-    players: () =>
-      (latestView?.players ?? []).map((p) => ({ ...p }) as unknown as PlayerView),
+    players: () => (latestView?.players ?? []).map((p) => ({ ...p }) as unknown as PlayerView),
     sendInput: (seq: number, x: number, y: number) => session.send('input', { seq, x, y }),
     isPlaying: () => (latestView?.phase ?? '') === 'PLAY',
+    bodies: () => latestView?.bodies ?? [],
+    sabotage: () => latestView?.sabotage.kind ?? '',
+    doorsClosed: () => Date.now() < (latestView?.doorsClosedUntil ?? 0),
+    isGhost: () =>
+      Boolean(latestView?.players.find((p) => p.id === session.selfId)?.isGhost ?? false),
   };
   play = renderPlay({
     bridge,
     code: view.code,
     onLeave: () => void leaveToHome(),
     onError: (message) => toast('error', message, 5000),
+    send: (type, payload) => {
+      if (new URLSearchParams(location.search).has('debug')) {
+        const w = window as unknown as { __debugSent?: Array<{ type: string; payload: unknown; at: number }> };
+        w.__debugSent = w.__debugSent ?? [];
+        w.__debugSent.push({ type, payload, at: Date.now() });
+      }
+      session.send(type, payload ?? {});
+    },
   });
   mount(root, play.node);
   void keepScreenAwake();
@@ -299,8 +311,9 @@ async function leaveToHome(): Promise<void> {
 session.setHandlers({
   onState: (view, you) => {
     latestView = view;
-    if (view.phase === 'PLAY') {
+    if (view.phase === 'PLAY' || view.phase === 'MEETING' || view.phase === 'END') {
       showPlay(view);
+      play?.update(view, you, session.secret);
       return;
     }
     // Any other phase (lobby, back-to-lobby, ended) is the lobby screen.
@@ -319,6 +332,19 @@ session.setHandlers({
     })();
   },
   onReconnect: () => toast('info', 'Back in. Seat restored.'),
+  onSecret: (secret) => {
+    // Roles are private: this packet never touches the shared state.
+    if (secret.role === 'impostor') {
+      toast('warn', `You are an IMPOSTOR${secret.mates.length ? ` with ${secret.mates.map((m) => m.name).join(', ')}` : ''}.`, 6000);
+    } else {
+      toast('info', `${secret.tasks.length} tasks on your list.`, 4000);
+    }
+    if (latestView) play?.update(latestView, latestView.players.find((p) => p.id === session.selfId), secret);
+  },
+  onVerdict: (verdict) => {
+    play?.showVerdict(verdict);
+    toast('info', verdict.text, 5000);
+  },
 });
 
 // Deep link / app shortcut handling:

@@ -194,3 +194,46 @@ switching the app to load remote assets.
 `/api/console/*` — an unlocked console is a public door into the AI cluster. In
 development the same state stays open so `pnpm dev` has no setup step. Reads are
 limited to 120/min and writes to 20/min per IP.
+
+## M3 — core rules
+
+**One rulebook module, used by the server, the bots and the tests.**
+`packages/shared/src/game/rules.ts` owns roles, task assignment, vote counting, win
+conditions and sabotage specs. The server calls it; the M4 scripted bodies will
+call the same functions. Duplicating "5 tasks per crew" in the client would drift
+the moment balance changes.
+
+**The client never decides anything that matters.** It renders what the server
+says and sends intents (`use`, `kill`, `vote`…). Every range check exists twice:
+the client hides the button, the server refuses the action. The playthrough test
+proves the second half by acting at a distance.
+
+**Roles live in a private packet, never in synced state.** `you` carries the role,
+your task list and your impostor mates. The playthrough asserts that no role string
+appears anywhere in the broadcast state, so a curious player can read the network
+traffic all they like.
+
+**Task minigames are DOM widgets, not Phaser scenes.** They are cheap to write,
+keyboard- and screen-reader friendly, and they do not fight the game loop for the
+canvas. The shell (`shell()` in `minigames.ts`) owns the promise, so *solving* and
+*abandoning* are different outcomes — the bug that made tasks uncompletable was
+exactly those two being the same callback.
+
+**UI that the player touches is never rebuilt per state packet.** The action bar
+and the meeting card keep their DOM nodes and rewrite only what changed. Rebuilding
+at 20 Hz silently ate taps and chat keystrokes; a phone at 30 fps would have made
+that look like "the game is unresponsive".
+
+**Ghosts get `openGrid` (nothing is solid), not a special movement path.** Collision
+is the only place walls exist, so a ghost is a one-line change instead of a second
+movement system. Vision, tasks and votes are gated separately.
+
+**The client test drives the on-screen stick, not the keyboard.** The product ships
+a thumb stick; a test that walks with WASD proves nothing about the thing players
+touch. Arrow keys stay supported on desktop.
+
+**Debug hooks are gated behind `?debug=1`.** `__station`, `__debugMinigame`,
+`__debugActions`, `__debugTasks`, `__debugSent` and the minigame trace all check the
+query string, so the shipped app exposes nothing extra while the acceptance tests
+can see into the page.
+

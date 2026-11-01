@@ -953,3 +953,592 @@ body {
     display: none;
   }
 }
+
+/* ============================================================ M3 game UI ==== */
+
+.play-role {
+  background: rgba(53, 214, 184, 0.16);
+  border: 1px solid rgba(53, 214, 184, 0.45);
+  color: #9df3dd;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-weight: 700;
+}
+.play-role.impostor {
+  background: rgba(229, 72, 77, 0.18);
+  border-color: rgba(229, 72, 77, 0.55);
+  color: #ffb3b6;
+}
+.play-task-chip {
+  /* The HUD itself ignores touches so the map stays draggable; this one button
+     has to take them back, or the canvas swallows every tap. */
+  pointer-events: auto;
+  min-height: 40px;
+  background: rgba(7, 11, 20, 0.72);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* banner: sabotage countdown / ghost notice */
+.play-banner {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 46px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+  z-index: 4;
+  width: min(92vw, 30rem);
+}
+.play-note {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  border: 1px solid var(--line);
+  background: rgba(7, 11, 20, 0.86);
+  color: var(--text);
+  text-align: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.play-note.warn {
+  border-color: rgba(255, 197, 61, 0.5);
+  color: #ffe3a3;
+}
+.play-note.danger {
+  border-color: rgba(229, 72, 77, 0.6);
+  color: #ffb3b6;
+}
+.play-note.ghost {
+  border-color: rgba(124, 226, 254, 0.4);
+  color: #bfefff;
+}
+
+/* action buttons: bottom right, thumb reach, 56px targets */
+.play-actions {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  align-items: flex-end;
+  z-index: 4;
+}
+.play-action {
+  min-width: 96px;
+  min-height: 56px;
+  padding: 0 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: rgba(13, 21, 36, 0.92);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  touch-action: manipulation;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+}
+.play-action.danger {
+  background: linear-gradient(180deg, #b1353a, #7d1f24);
+  border-color: #e5484d;
+}
+.play-action.warn {
+  background: linear-gradient(180deg, #a37a14, #6d5109);
+  border-color: #ffc53d;
+}
+.play-action.good {
+  background: linear-gradient(180deg, #1f7a52, #12513a);
+  border-color: #35d6b8;
+}
+.play-action.small {
+  min-height: 48px;
+  font-size: 0.82rem;
+}
+.play-action:active {
+  transform: translateY(1px);
+}
+
+/* task list sheet */
+.task-panel {
+  position: absolute;
+  top: 56px;
+  left: max(12px, env(safe-area-inset-left));
+  width: min(19rem, 78vw);
+  max-height: 60vh;
+  overflow: auto;
+  background: rgba(7, 11, 20, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  z-index: 5;
+  font-size: 0.8rem;
+}
+.task-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(150, 190, 255, 0.08);
+}
+.task-row.done {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.task-room {
+  color: var(--cyan);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.task-name {
+  grid-column: 1;
+}
+.task-state {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--good);
+}
+
+/* minigame modal */
+.mg-host {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 12, 0.72);
+  z-index: 20;
+  padding: 12px;
+}
+.mg-card {
+  width: min(26rem, 94vw);
+  background: #0d1524;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.mg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.mg-close {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1rem;
+}
+.mg-hint {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  margin-bottom: 10px;
+}
+.mg-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mg-big {
+  min-height: 64px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  touch-action: none;
+}
+.mg-bar {
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.mg-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #35d6b8, #7ce2fe);
+}
+.mg-wires,
+.mg-connect {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+.mg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mg-wire {
+  width: 56px;
+  height: 40px;
+  border-radius: 8px;
+  border: 2px solid var(--w, #4b8bf5);
+  background: color-mix(in oklab, var(--w, #4b8bf5) 30%, transparent);
+  min-height: 44px;
+}
+.mg-wire.picked {
+  outline: 2px solid #fff;
+}
+.mg-wire.wired {
+  background: var(--w, #4b8bf5);
+}
+.mg-grid4 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.mg-pad {
+  height: 84px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in oklab, var(--p, #4b8bf5) 25%, transparent);
+}
+.mg-pad.lit {
+  background: var(--p, #4b8bf5);
+  box-shadow: 0 0 18px var(--p, #4b8bf5);
+}
+.mg-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.mg-cell {
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+.mg-cell.lit {
+  background: #1f7a52;
+}
+.mg-track {
+  position: relative;
+  height: 64px;
+  border-radius: 12px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 12px, transparent 12px 24px);
+  border: 1px solid var(--line);
+}
+.mg-card-swipe {
+  position: absolute;
+  top: 10px;
+  left: 6px;
+  width: 64px;
+  height: 44px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #7ce2fe, #2a7c96);
+  touch-action: none;
+}
+.mg-slider-track {
+  position: relative;
+  height: 56px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.mg-zone {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 10%;
+  background: rgba(53, 214, 184, 0.45);
+  border-radius: 6px;
+}
+.mg-needle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #fff;
+}
+.mg-slider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  width: 100%;
+}
+.mg-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.mg-chip {
+  min-width: 56px;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+}
+.mg-chip.picked {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.mg-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #7ce2fe;
+}
+.mg-dot.long {
+  width: 54px;
+  border-radius: 999px;
+}
+.mg-dial {
+  position: relative;
+  margin: 0 auto;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: conic-gradient(from 0deg, #1f3a52, #0d1524 60%, #1f3a52);
+  touch-action: none;
+}
+.mg-knob {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 4px;
+  height: 70px;
+  margin-left: -2px;
+  background: #7ce2fe;
+  transform-origin: 50% 100%;
+  border-radius: 2px;
+}
+.mg-scan {
+  position: relative;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+}
+.mg-target {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14%;
+  background: rgba(53, 214, 184, 0.4);
+}
+.mg-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  background: #fff;
+}
+.mg-socket,
+.mg-plug {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  border: 2px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+.mg-socket.filled {
+  border-color: #35d6b8;
+  background: rgba(53, 214, 184, 0.25);
+}
+.mg-plug {
+  border-color: var(--p, #4b8bf5);
+  background: color-mix(in oklab, var(--p, #4b8bf5) 35%, transparent);
+}
+.mg-plug.picked {
+  outline: 2px solid #fff;
+}
+
+/* meeting overlay */
+.meeting-host {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 12, 0.82);
+  z-index: 30;
+  padding: 10px;
+}
+.meeting-card {
+  width: min(44rem, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: #0b1220;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.meet-timer {
+  color: var(--warn);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.meet-sub {
+  color: var(--text-dim);
+  font-size: 0.76rem;
+}
+.meet-chat {
+  max-height: 28vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 8px;
+}
+.meet-line.dim {
+  color: var(--text-faint);
+}
+.meet-chatbar {
+  display: flex;
+  gap: 8px;
+}
+.meet-input {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 0 12px;
+  font: inherit;
+}
+.meet-send {
+  min-width: 72px;
+  min-height: 48px;
+  border-radius: 10px;
+  border: none;
+  background: var(--cyan);
+  color: #04121a;
+  font: inherit;
+  font-weight: 700;
+}
+.vote-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.vote-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.vote-row.chosen {
+  border-color: var(--danger);
+  background: rgba(229, 72, 77, 0.18);
+}
+.vote-row.self {
+  opacity: 0.7;
+}
+.vote-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+.vote-tag {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+.meet-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* verdict toast + end screen */
+.verdict-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  background: rgba(11, 18, 32, 0.96);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  z-index: 40;
+  max-width: 90vw;
+}
+.end-host {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 12, 0.88);
+  z-index: 35;
+  padding: 12px;
+}
+.end-card {
+  width: min(30rem, 94vw);
+  background: #0b1220;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  padding: 20px;
+  text-align: center;
+}
+.end-title strong {
+  font-size: 1.3rem;
+  letter-spacing: 0.04em;
+}
+.end-title.crew strong {
+  color: var(--good);
+}
+.end-title.impostor strong {
+  color: var(--danger);
+}
+.end-sub {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+.hidden {
+  display: none !important;
+}
+.joy-zone.disabled {
+  pointer-events: none;
+  opacity: 0.35;
+}

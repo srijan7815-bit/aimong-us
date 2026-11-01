@@ -39,6 +39,58 @@ export const PlayerState = schema({
   moving: t.boolean().default(false),
   /** Last movement input sequence applied — clients use it to reconcile. */
   seq: t.number().default(0),
+  // --- M3: rules. Roles are NOT here: role is private per client. ---
+  alive: t.boolean().default(true),
+  isGhost: t.boolean().default(false),
+  tasksDone: t.number().default(0),
+  tasksTotal: t.number().default(0),
+  /** Impostor kill cooldown ready at (epoch ms). 0 = ready now. */
+  killReadyAt: t.number().default(0),
+  /** Emergency meetings this player has left. */
+  emergenciesLeft: t.number().default(1),
+  /** Role, revealed only after the match ends (or at the ejection banner). */
+  rolePublic: t.string().default('unknown'),
+});
+
+/** A body on the floor. Everyone alive can see and report it. */
+export const BodyState = schema({
+  id: t.string(),
+  victimId: t.string(),
+  victimName: t.string(),
+  color: t.string(),
+  x: t.number(),
+  y: t.number(),
+  killedAt: t.number().default(0),
+  reported: t.boolean().default(false),
+});
+
+/** Live sabotage. Only one is ever active. */
+export const SabotageState = schema({
+  kind: t.string().default(''),
+  endsAt: t.number().default(0),
+  /** Task spots already fixed for this sabotage. */
+  fixed: t.array('string'),
+});
+
+/** Meeting + voting. Votes themselves stay server-side until the tally. */
+export const MeetingState = schema({
+  active: t.boolean().default(false),
+  /** 'DISCUSSION' | 'VOTING' */
+  stage: t.string().default(''),
+  calledBy: t.string().default(''),
+  reason: t.string().default(''),
+  /** Body that was reported, if any. */
+  bodyId: t.string().default(''),
+  endsAt: t.number().default(0),
+  votesCast: t.number().default(0),
+  votersAlive: t.number().default(0),
+});
+
+/** End-of-match result, broadcast so every client draws the same screen. */
+export const ResultState = schema({
+  winner: t.string().default(''),
+  reason: t.string().default(''),
+  text: t.string().default(''),
 });
 
 export const ChatEntryState = schema({
@@ -60,11 +112,23 @@ export const LobbyState = schema({
   settings: SettingsState,
   players: t.map(PlayerState),
   chat: t.array(ChatEntryState),
+  // --- M3 ---
+  bodies: t.map(BodyState),
+  sabotage: SabotageState,
+  meeting: MeetingState,
+  result: ResultState,
+  /** Matching tasks left across living crew (0 = crew win). */
+  tasksRemaining: t.number().default(0),
+  /** Doors locked until (epoch ms). */
+  doorsClosedUntil: t.number().default(0),
 });
 
 export type LobbyState = InstanceType<typeof LobbyState>;
 export type PlayerState = InstanceType<typeof PlayerState>;
 export type ChatEntryState = InstanceType<typeof ChatEntryState>;
 export type SettingsState = InstanceType<typeof SettingsState>;
+export type BodyState = InstanceType<typeof BodyState>;
+export type MeetingState = InstanceType<typeof MeetingState>;
+export type ResultState = InstanceType<typeof ResultState>;
 
 export const MAX_CHAT_HISTORY = 60;

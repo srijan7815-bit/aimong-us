@@ -70,6 +70,17 @@ const PILLARS = [
   [10, 18, 2, 1],
 ];
 
+/**
+ * Doors: the tiles a lockdown seals. They sit in three-wide corridors, so closing
+ * one actually cuts the route (used by the "doors" sabotage).
+ */
+const DOORS = [
+  { id: 'door-medbay', rect: [8, 12, 3, 1] },
+  { id: 'door-galley', rect: [27, 25, 3, 1] },
+  { id: 'door-cargo', rect: [52, 12, 3, 1] },
+  { id: 'door-comms', rect: [38, 35, 3, 1] },
+];
+
 /** Vents: paired teleport nodes (behaviour lands in M3). */
 const VENTS = [
   { id: 'vent-medbay', room: 'medbay', at: [5, 4], links: ['vent-engine'] },
@@ -206,6 +217,12 @@ for (const room of ROOMS) {
   if (touched < rw * rh * 0.6) problems.push(`room ${room.id} is not reachable from spawn`);
 }
 for (const vent of VENTS) if (!reachable.has(`${vent.at[0]},${vent.at[1]}`)) problems.push(`vent ${vent.id} is inside a wall`);
+for (const door of DOORS) {
+  const [dx, dy, dw, dh] = door.rect;
+  for (let y = dy; y < dy + dh; y++)
+    for (let x = dx; x < dx + dw; x++)
+      if (!walkable(x, y)) problems.push(`door ${door.id} tile ${x},${y} is not floor`);
+}
 for (const task of TASKS) if (!reachable.has(`${task.at[0]},${task.at[1]}`)) problems.push(`task ${task.id} is inside a wall`);
 for (const spawn of SPAWNS) if (!reachable.has(`${spawn[0]},${spawn[1]}`)) problems.push(`spawn ${spawn} is inside a wall`);
 
@@ -369,6 +386,18 @@ const tiled = {
             { name: 'kind', type: 'string', value: room.kind },
           ],
         })),
+        ...DOORS.map((door, index) => ({
+          id: 200 + index,
+          name: door.id,
+          type: 'door',
+          x: door.rect[0] * TILE,
+          y: door.rect[1] * TILE,
+          width: door.rect[2] * TILE,
+          height: door.rect[3] * TILE,
+          visible: true,
+          rotation: 0,
+          properties: [],
+        })),
         ...obj(VENTS),
         ...obj(TASKS),
         ...SPAWNS.map((at, index) => ({
@@ -431,6 +460,9 @@ ${ROOMS.map((r) => `    { id: ${q(r.id)}, name: ${q(r.name)}, kind: ${q(r.kind)}
   roomGraph: [
 ${roomGraph.map((r) => `    { id: ${q(r.id)}, links: [${r.links.map(q).join(', ')}] },`).join('\n')}
   ],
+  doors: [
+${DOORS.map((d) => `    { id: ${q(d.id)}, rect: { x: ${d.rect[0]}, y: ${d.rect[1]}, w: ${d.rect[2]}, h: ${d.rect[3]} } },`).join('\n')}
+  ],
   vents: [
 ${VENTS.map((v) => `    { id: ${q(v.id)}, room: ${q(v.room)}, tile: { x: ${v.at[0]}, y: ${v.at[1]} }, links: [${v.links.map(q).join(', ')}] },`).join('\n')}
   ],
@@ -450,6 +482,6 @@ writeFileSync(join(worldDir, 'map-data.ts'), ts);
 const floorCount = grid.flat().filter((c) => c === FLOOR).length;
 console.log(`map ok: ${COLS}x${ROWS} tiles, ${ROOMS.length} rooms, ${edges} corridors, ${loops} loops`);
 console.log(`  walkable tiles ${floorCount} (${((floorCount / (COLS * ROWS)) * 100).toFixed(1)}%)`);
-console.log(`  ${VENTS.length} vents, ${TASKS.length} task spots, ${SPAWNS.length} spawns`);
+console.log(`  ${DOORS.length} doors, ${VENTS.length} vents, ${TASKS.length} task spots, ${SPAWNS.length} spawns`);
 console.log('  wrote apps/client/public/assets/maps/halcyon9.tmj');
 console.log('  wrote packages/shared/src/world/map-data.ts');

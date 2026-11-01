@@ -87,6 +87,12 @@ export const WORLD: WorldMap = {
     { id: 'comms', links: ['storage', 'engine', 'observatory'] },
     { id: 'observatory', links: ['comms', 'cargo'] },
   ],
+  doors: [
+    { id: 'door-medbay', rect: { x: 8, y: 12, w: 3, h: 1 } },
+    { id: 'door-galley', rect: { x: 27, y: 25, w: 3, h: 1 } },
+    { id: 'door-cargo', rect: { x: 52, y: 12, w: 3, h: 1 } },
+    { id: 'door-comms', rect: { x: 38, y: 35, w: 3, h: 1 } },
+  ],
   vents: [
     { id: 'vent-medbay', room: 'medbay', tile: { x: 5, y: 4 }, links: ['vent-engine'] },
     { id: 'vent-engine', room: 'engine', tile: { x: 16, y: 38 }, links: ['vent-medbay'] },

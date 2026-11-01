@@ -49,6 +49,15 @@ export type MoveInput = z.infer<typeof MoveInput>;
 export const ClientMessages = {
   ready: z.object({ ready: z.boolean() }),
   input: MoveInput,
+  // --- M3 gameplay ---
+  kill: z.object({ target: z.string().min(1).max(64) }),
+  vent: z.object({ ventId: z.string().min(1).max(64) }),
+  report: z.object({ bodyId: z.string().min(1).max(96) }),
+  emergency: z.object({}),
+  taskDone: z.object({ taskId: z.string().min(1).max(80) }),
+  fix: z.object({ spotId: z.string().min(1).max(64) }),
+  sabotage: z.object({ kind: z.enum(['lights', 'reactor', 'doors']) }),
+  vote: z.object({ target: z.string().min(1).max(64).nullable() }),
   setName: z.object({ name: PlayerName }),
   chat: z.object({ text: ChatText }),
   settings: z.object({ patch: LobbySettingsPatch }),

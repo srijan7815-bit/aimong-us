@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## [0.4.0] — 2026-11-01
+
+### Added
+- **The round itself (M3).** Roles (1 impostor per 5–7 seats, 2 per 8+), 5 tasks per
+  crew member from 12 map spots, kills with a 25 s cooldown and a body left where
+  the victim fell, body reports, the Galley emergency button (one per player),
+  discussion → voting → ejection with skips and ties, ghosts that walk through
+  walls and cannot act, impostor vents, and three sabotages (lights 40 s, doors
+  12 s, reactor 45 s and lethal).
+- **Twelve original task minigames** (`apps/client/src/game/minigames.ts`): wiring,
+  pump prime, panel memory, keycard swipe, output slider, sample sort, morse
+  repeat, breaker sequence, valve balance, cell charge, specimen scan, array
+  connect. All built from DOM + CSS, no assets, no copying.
+- **The rulebook as data** (`packages/shared/src/game/rules.ts`) with tests:
+  `assignRoles`, `assignTasks`, `minigameForSpot`, `tallyVotes`, `checkWin`,
+  `SABOTAGE_SPECS`.
+- **A\* pathfinding** (`packages/shared/src/world/path.ts`): 8-way, no corner
+  cutting, shared by the playthrough script, the client debug tools and (next
+  milestone) the bot bodies.
+- **In-game UI**: role chip, live task list, contextual action bar (use/report/
+  kill/vent/fix/emergency/sabotage), sabotage banner with countdown, meeting
+  overlay with chat and voting, verdict toast, ghost notice, end-of-round card
+  with the reveal.
+- **Tests**: `apps/server/scripts/playthrough.ts` (7 SDK clients, a whole round,
+  19 checks), `scripts/m3-client-test.mjs` (2 real browsers + the owner console +
+  4 residents, 11 checks), `packages/shared/test/rules.test.ts`.
+
+### Fixed
+- Winning a minigame never sent `taskDone` (the solve and close callbacks were the
+  same function, so the handle was never resolved).
+- The task list never ticked after a task: the server did not re-send the private
+  `you` packet.
+- The in-game action bar and the meeting card were rebuilt on every state packet,
+  which destroyed buttons under the player's thumb and stole focus from the chat
+  box. Both now update only what changed.
+- The task button in the HUD swallowed none of its taps because the HUD is
+  `pointer-events:none` — it now takes them back.
+- The lobby counted the host's AI-seat setting instead of the residents actually
+  seated, so "Start game" stayed disabled after a team-code dispatch.
+
 ## [0.3.0] — 2026-11-01
 
 ### Added

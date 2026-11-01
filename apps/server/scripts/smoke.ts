@@ -89,9 +89,7 @@ async function main(): Promise<void> {
   // M2: start opens the station (movement only — roles arrive in M3).
   room1.send('start', {});
   await waitFor(() => room1.state.phase === 'PLAY', 'station opens');
-  if (!notices1.some((t) => t.includes('Roles, tasks and kills arrive in M3')))
-    throw new Error('start did not explain what is missing yet');
-  checks.push('start opens the station and says roles/tasks arrive in M3');
+  checks.push('start opens the station');
 
   // Every seat is on the map, standing on floor.
   const seated = players(room1);

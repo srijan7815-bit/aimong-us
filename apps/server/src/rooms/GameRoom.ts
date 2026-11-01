@@ -31,8 +31,24 @@ import {
   stepPlayer,
   type MoveInput,
 } from '@aimong/shared';
-import { GRID } from '../world/station.js';
+import { GRID, GRID_DOORS, OPEN_GRID } from '../world/station.js';
 import { TickStats } from '../perf/tick-stats.js';
+import {
+  SABOTAGE_SPECS,
+  DARK_VISION_TILES,
+  assignRoles,
+  assignTasks,
+  checkWin,
+  describeWin,
+  makeTask,
+  tallyVotes,
+  canSeeAnywhere,
+  type Role,
+  type SecretRole,
+  type TaskAssignment,
+  type SabotageKind,
+} from '@aimong/shared';
+import { BodyState } from './state.js';
 import { getAppConfig } from '../app-config.js';
 import { logger } from '../logger-instance.js';
 
@@ -61,6 +77,17 @@ export class GameRoom extends Room<{ state: LobbyState }> {
   private moveInputs = new Map<string, InputState>();
   /** Tick timings, exposed through /api/metrics in non-production. */
   readonly ticks = new TickStats();
+
+  // ---------------------------------------------------------------- match state
+  // Roles, per-player tasks and votes NEVER go into the synced state: Colyseus
+  // broadcasts state to everyone, so a role in there is a role leak.
+  private roles = new Map<string, Role>();
+  private tasks = new Map<string, TaskAssignment[]>();
+  private votes = new Map<string, string | null>();
+  private sabotageFixed = new Set<string>();
+  private meetingStageEndsAt = 0;
+  private matchEnded = false;
+  private rngSeed = Date.now() % 2147483647;
 
   override onCreate(): void {
     const cfg = getAppConfig();
@@ -153,6 +180,8 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     if (player.isHost) this.state.hostId = client.sessionId;
 
     this.systemMessage(`${name} joined`);
+    // Reconnecting into a live round: hand back the private role/tasks.
+    if (this.state.phase !== 'LOBBY') setTimeout(() => this.sendSecret(client.sessionId), 50);
     if (name !== desired) {
       this.notice(client, 'info', `Name taken — you are "${name}" here.`);
     }
@@ -354,6 +383,194 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       this.moveInputs.set(client.sessionId, { ...msg.data, at: Date.now() });
     });
 
+    // ---- M3 gameplay messages ----
+    this.onMessage('kill', (client, raw) => {
+      const killer = this.state.players.get(client.sessionId);
+      if (!killer || !this.canAct(killer)) return;
+      if (this.roles.get(killer.id) !== 'impostor') return;
+      if (Date.now() < killer.killReadyAt) return;
+      const msg = ClientMessages.kill.safeParse(raw);
+      if (!msg.success) return;
+      const victim = this.state.players.get(msg.data.target);
+      if (!victim || !victim.alive) return;
+      if (this.roles.get(victim.id) === 'impostor') return;
+      if (Math.hypot(victim.x - killer.x, victim.y - killer.y) > 48) {
+        this.notice(client, 'warn', 'Too far away.');
+        return;
+      }
+      victim.alive = false;
+      victim.isGhost = true;
+      victim.moving = false;
+      killer.killReadyAt = Date.now() + this.state.settings.killCooldownSec * 1000;
+      this.spawnBody(victim.id);
+      this.sendSecret(victim.id);
+      const witnesses = [...this.state.players.values()].filter(
+        (p) =>
+          p.id !== killer.id &&
+          p.id !== victim.id &&
+          p.alive &&
+          canSeeAnywhere(GRID, p.x, p.y, victim.x, victim.y,
+            this.state.sabotage.kind === 'lights' ? DARK_VISION_TILES : undefined),
+      );
+      if (witnesses.length > 0) {
+        // Only the killer's client learns that someone saw — never who.
+        this.notice(client, 'info', 'Someone may have seen that.');
+      }
+      this.recountTasks();
+      this.checkWinNow();
+    });
+
+    this.onMessage('vent', (client, raw) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !this.canAct(player)) return;
+      if (this.roles.get(player.id) !== 'impostor') return;
+      const msg = ClientMessages.vent.safeParse(raw);
+      if (!msg.success) return;
+      const vent = WORLD.vents.find((v) => v.id === msg.data.ventId);
+      if (!vent) return;
+      const near = Math.hypot(player.x - vent.tile.x * 32 - 16, player.y - vent.tile.y * 32 - 16) <= 44;
+      if (!near) return;
+      const target = WORLD.vents.find((v) => v.id === vent.links[0]);
+      if (!target) return;
+      player.x = target.tile.x * 32 + 16;
+      player.y = target.tile.y * 32 + 16;
+      this.notice(client, 'info', 'Vented.');
+    });
+
+    this.onMessage('report', (client, raw) => {
+      const reporter = this.state.players.get(client.sessionId);
+      if (!reporter || !this.canAct(reporter)) return;
+      const msg = ClientMessages.report.safeParse(raw);
+      if (!msg.success) return;
+      const body = this.state.bodies.get(msg.data.bodyId);
+      if (!body) return;
+      if (Math.hypot(body.x - reporter.x, body.y - reporter.y) > 64) return;
+      this.callMeeting(reporter.id, 'report', body.id);
+    });
+
+    this.onMessage('lobby', (client) => {
+      if (!this.isHost(client)) return;
+      this.returnToLobby();
+    });
+
+    this.onMessage('emergency', (client) => {
+      const caller = this.state.players.get(client.sessionId);
+      if (!caller || !this.canAct(caller)) return;
+      if (caller.emergenciesLeft <= 0) {
+        this.notice(client, 'warn', 'Your emergency button is used up.');
+        return;
+      }
+      // The button lives in the Galley (this station's mess hall).
+      const galley = WORLD.rooms.find((r) => r.id === 'galley');
+      if (!galley) return;
+      const cx = (galley.rect.x + galley.rect.w / 2) * 32;
+      const cy = (galley.rect.y + galley.rect.h / 2) * 32;
+      if (Math.hypot(caller.x - cx, caller.y - cy) > 96) {
+        this.notice(client, 'warn', 'The emergency button is in the Galley.');
+        return;
+      }
+      this.callMeeting(caller.id, 'emergency');
+    });
+
+    this.onMessage('taskDone', (client, raw) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !this.canAct(player)) {
+        logger.warn({ session: client.sessionId, phase: this.state.phase }, 'taskDone refused: cannot act');
+        return;
+      }
+      if (this.roles.get(player.id) !== 'crew') {
+        logger.warn({ player: player.name }, 'taskDone refused: not crew');
+        return;
+      }
+      const msg = ClientMessages.taskDone.safeParse(raw);
+      if (!msg.success) {
+        logger.warn({ raw }, 'taskDone refused: bad payload');
+        return;
+      }
+      const list = this.tasks.get(player.id) ?? [];
+      const task = list.find((t) => t.id === msg.data.taskId);
+      if (!task || task.done) {
+        logger.warn({ player: player.name, taskId: msg.data.taskId, tasks: list.map((t) => t.id) }, 'taskDone refused: no such task');
+        return;
+      }
+      const spot = WORLD.taskSpots.find((s) => s.id === task.spotId);
+      if (!spot) return;
+      // Server enforces presence: you must be standing on the task spot.
+      const sx = spot.tile.x * 32 + 16;
+      const sy = spot.tile.y * 32 + 16;
+      if (Math.hypot(player.x - sx, player.y - sy) > 56) {
+        logger.warn(
+          { player: player.name, spot: spot.id, dist: Math.round(Math.hypot(player.x - sx, player.y - sy)) },
+          'taskDone refused: too far',
+        );
+        return;
+      }
+      task.done = true;
+      player.tasksDone = list.filter((t) => t.done).length;
+      this.recountTasks();
+      // The task list is private, so the client only learns about the tick when
+      // the server re-sends 'you'. Without this the HUD stays at 0/5 forever.
+      this.sendSecret(player.id);
+      logger.info({ player: player.name, spot: spot.id }, 'task done');
+      this.checkWinNow();
+    });
+
+    this.onMessage('fix', (client, raw) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !this.canAct(player)) return;
+      if (this.roles.get(player.id) !== 'impostor' && !this.state.sabotage.kind) return;
+      const msg = ClientMessages.fix.safeParse(raw);
+      if (!msg.success) return;
+      const spec = SABOTAGE_SPECS[this.state.sabotage.kind as SabotageKind];
+      if (!spec || !spec.fixSpots.includes(msg.data.spotId)) return;
+      const spot = WORLD.taskSpots.find((s) => s.id === msg.data.spotId);
+      if (!spot) return;
+      const sx = spot.tile.x * 32 + 16;
+      const sy = spot.tile.y * 32 + 16;
+      if (Math.hypot(player.x - sx, player.y - sy) > 56) return;
+      this.sabotageFixed.add(msg.data.spotId);
+      this.state.sabotage.fixed.push(msg.data.spotId);
+      const needed = spec.fixSpots.length;
+      if (this.sabotageFixed.size >= needed) {
+        this.state.sabotage.kind = '';
+        this.state.sabotage.endsAt = 0;
+        this.state.sabotage.fixed.clear();
+        this.sabotageFixed.clear();
+        this.systemMessage(`${spec.label} fixed. Nice work.`);
+      } else {
+        this.systemMessage(`${spec.label}: ${this.sabotageFixed.size}/${needed} fixed.`);
+      }
+    });
+
+    this.onMessage('sabotage', (client, raw) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !this.canAct(player)) return;
+      if (this.roles.get(player.id) !== 'impostor') return;
+      if (this.state.sabotage.kind) return;
+      const msg = ClientMessages.sabotage.safeParse(raw);
+      if (!msg.success) return;
+      const spec = SABOTAGE_SPECS[msg.data.kind];
+      this.state.sabotage.kind = spec.kind;
+      this.state.sabotage.endsAt = Date.now() + spec.durationSec * 1000;
+      this.state.sabotage.fixed.clear();
+      this.sabotageFixed.clear();
+      if (spec.kind === 'doors') {
+        this.state.doorsClosedUntil = Date.now() + spec.durationSec * 1000;
+      }
+      this.systemMessage(`⚠ ${spec.label}.`);
+      this.touchRegistry();
+    });
+
+    this.onMessage('vote', (client, raw) => {
+      const voter = this.state.players.get(client.sessionId);
+      if (!voter || !voter.alive) return;
+      if (this.state.phase !== 'MEETING' || this.state.meeting.stage !== 'VOTING') return;
+      const msg = ClientMessages.vote.safeParse(raw);
+      if (!msg.success) return;
+      this.votes.set(voter.id, msg.data.target);
+      this.state.meeting.votesCast = this.votes.size;
+    });
+
     this.onMessage('resetPositions', (client) => {
       // Dev aid used by the smoke/perf harness to put everyone back on spawn.
       if (this.isHost(client)) this.placeAtSpawns();
@@ -370,8 +587,9 @@ export class GameRoom extends Room<{ state: LobbyState }> {
         if (player.isAi) return;
         const input = this.moveInputs.get(player.id);
         const fresh = input && now - input.at <= INPUT_TTL_MS ? input : null;
+        const grid = this.gridFor(player);
         const step = fresh
-          ? stepPlayer(GRID, player.x, player.y, fresh.x, fresh.y, SIM_STEP_MS)
+          ? stepPlayer(grid, player.x, player.y, fresh.x, fresh.y, SIM_STEP_MS)
           : { x: player.x, y: player.y, moving: false, dirX: player.dirX, dirY: player.dirY };
         if (step.x !== player.x) player.x = step.x;
         if (step.y !== player.y) player.y = step.y;
@@ -382,6 +600,31 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       });
       void index;
     }
+    // ---- rules timers (MEETING phases, sabotage expiry) ----
+    if (this.state.phase === 'MEETING' && this.state.meeting.active && now > this.meetingStageEndsAt) {
+      if (this.state.meeting.stage === 'DISCUSSION') {
+        this.state.meeting.stage = 'VOTING';
+        this.state.meeting.endsAt = now + this.state.settings.votingSec * 1000;
+        this.meetingStageEndsAt = this.state.meeting.endsAt;
+        this.broadcast('notice', { level: 'info', text: 'Voting is open.' });
+      } else {
+        this.finishVoting();
+      }
+    }
+    if (this.state.phase === 'PLAY' && this.state.sabotage.kind) {
+      const spec = SABOTAGE_SPECS[this.state.sabotage.kind as SabotageKind];
+      if (spec && now > this.state.sabotage.endsAt) {
+        if (spec.lethal) {
+          this.checkWinNow();
+        } else {
+          this.state.sabotage.kind = '';
+          this.state.sabotage.endsAt = 0;
+          this.state.sabotage.fixed.clear();
+          this.systemMessage(`${spec.label} fixed itself. The station resets.`);
+        }
+      }
+    }
+
     this.ticks.record(performance.now() - started, this.state.players.size);
   }
 
@@ -424,22 +667,247 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     // M2 launches a movement preview: everyone walks the station with no roles,
     // no tasks and no kills yet. M3 turns this into a real match. The notice says
     // exactly that rather than pretending the game has started.
+    this.startMatch();
+  }
+
+  // ----------------------------------------------------------- M3: match setup
+
+  /** Deterministic-enough RNG so tests and sims can be seeded. */
+  private random(): number {
+    this.rngSeed = (this.rngSeed * 1103515245 + 12345) & 0x7fffffff;
+    return this.rngSeed / 0x7fffffff;
+  }
+
+  private startMatch(): void {
+    const players = [...this.state.players.values()];
+    const ids = players.map((p) => p.id);
+    this.roles = assignRoles(ids, this.state.settings.impostors, () => this.random());
+    const crew = ids.filter((id) => this.roles.get(id) === 'crew');
+    this.tasks = assignTasks(
+      WORLD.taskSpots.map((spot) => ({ id: spot.id, room: spot.room })),
+      crew,
+      this.state.settings.tasksPerCrew,
+      () => this.random(),
+    );
+
+    this.votes.clear();
+    this.sabotageFixed.clear();
+    this.matchEnded = false;
+    this.moveInputs.clear();
+
+    // Reset everyone onto spawn points with their rules fields.
     this.placeAtSpawns();
+    let index = 0;
+    this.state.players.forEach((player) => {
+      player.alive = true;
+      player.isGhost = false;
+      player.killReadyAt = 0;
+      player.emergenciesLeft = 1;
+      player.rolePublic = 'unknown';
+      const list = this.tasks.get(player.id) ?? [];
+      player.tasksTotal = this.roles.get(player.id) === 'crew' ? list.length : 0;
+      player.tasksDone = 0;
+      index++;
+    });
+    void index;
+
+    this.state.bodies.clear();
+    this.state.doorsClosedUntil = 0;
+    this.state.sabotage.kind = '';
+    this.state.sabotage.endsAt = 0;
+    this.state.sabotage.fixed.clear();
+    this.state.meeting.active = false;
+    this.state.meeting.stage = '';
+    this.state.result.winner = '';
+    this.state.result.reason = '';
+    this.state.result.text = '';
+    this.recountTasks();
     this.state.phase = 'PLAY';
     this.touchRegistry();
-    this.broadcast('notice', {
-      level: 'info',
-      text: 'Station open — walk around. Roles, tasks and kills arrive in M3.',
-    });
-    this.systemMessage(`${total} crew on the station. Free roam (no roles yet).`);
-    logger.info({ code: this.code, players: this.state.players.size }, 'movement preview started');
+
+    // Private role packets — the only place a role is ever sent.
+    for (const player of players) this.sendSecret(player.id);
+
+    this.broadcast('notice', { level: 'info', text: 'Roles are out. Tasks are on your list.' });
+    this.systemMessage(
+      `${players.length} crew on the station · ${this.state.settings.impostors} impostor(s) among them.`,
+    );
+    logger.info({ code: this.code, players: players.length }, 'match started');
   }
+
+  private sendSecret(playerId: string): void {
+    const role = this.roles.get(playerId);
+    if (!role) return;
+    const mates =
+      role === 'impostor'
+        ? [...this.roles.entries()]
+            .filter(([id, r]) => r === 'impostor' && id !== playerId)
+            .map(([id]) => ({ id, name: this.state.players.get(id)?.name ?? '?' }))
+        : [];
+    const secret: SecretRole = {
+      role,
+      mates,
+      tasks: this.tasks.get(playerId) ?? [],
+      ejected: false,
+    };
+    const client = this.clients.find((c) => c.sessionId === playerId);
+    client?.send('you', secret);
+  }
+
+  private spawnBody(victimId: string): void {
+    const victim = this.state.players.get(victimId);
+    if (!victim) return;
+    const body = new BodyState();
+    body.id = `body-${victimId}-${Date.now()}`;
+    body.victimId = victimId;
+    body.victimName = victim.name;
+    body.color = victim.color;
+    body.x = victim.x;
+    body.y = victim.y;
+    body.killedAt = Date.now();
+    body.reported = false;
+    this.state.bodies.set(body.id, body);
+  }
+
+  private recountTasks(): void {
+    let remaining = 0;
+    for (const player of this.state.players.values()) {
+      if (this.roles.get(player.id) !== 'crew' || !player.alive) continue;
+      const list = this.tasks.get(player.id) ?? [];
+      remaining += list.filter((t) => !t.done).length;
+    }
+    this.state.tasksRemaining = remaining;
+  }
+
+  private livingOf(role: Role): number {
+    let count = 0;
+    for (const player of this.state.players.values()) {
+      if (player.alive && this.roles.get(player.id) === role) count++;
+    }
+    return count;
+  }
+
+  private gridFor(player: { isGhost: boolean }): typeof GRID {
+    if (player.isGhost) return OPEN_GRID; // ghosts drift through walls
+    if (Date.now() < this.state.doorsClosedUntil) return GRID_DOORS;
+    return GRID;
+  }
+
+  private endMatch(winner: 'crew' | 'impostor', reason: Parameters<typeof describeWin>[0]): void {
+    if (this.matchEnded) return;
+    this.matchEnded = true;
+    this.state.phase = 'END';
+    this.state.meeting.active = false;
+    this.state.sabotage.kind = '';
+    this.state.result.winner = winner;
+    this.state.result.reason = reason;
+    this.state.result.text = describeWin(reason, winner);
+    // Roles become public at the end — this is the reveal.
+    this.state.players.forEach((player) => {
+      player.rolePublic = this.roles.get(player.id) ?? 'crew';
+    });
+    for (const player of this.state.players.values()) this.sendSecret(player.id);
+    this.systemMessage(this.state.result.text);
+    this.touchRegistry();
+    logger.info({ code: this.code, winner, reason }, 'match ended');
+  }
+
+  private checkWinNow(): void {
+    if (this.matchEnded || this.state.phase === 'LOBBY') return;
+    const result = checkWin({
+      crewAlive: this.livingOf('crew'),
+      impostorsAlive: this.livingOf('impostor'),
+      tasksRemaining: this.state.tasksRemaining,
+      reactorCritical: this.state.sabotage.kind === 'reactor' && Date.now() > this.state.sabotage.endsAt,
+    });
+    if (result) this.endMatch(result.winner, result.reason);
+  }
+
+  // ---------------------------------------------------------- M3: meetings
+
+  private callMeeting(callerId: string, reason: string, bodyId = ''): void {
+    if (this.state.phase !== 'PLAY' || this.state.meeting.active) return;
+    const caller = this.state.players.get(callerId);
+    if (!caller) return;
+    this.votes.clear();
+    this.state.phase = 'MEETING';
+    this.state.meeting.active = true;
+    this.state.meeting.stage = 'DISCUSSION';
+    this.state.meeting.calledBy = callerId;
+    this.state.meeting.reason = reason;
+    this.state.meeting.bodyId = bodyId;
+    this.state.meeting.votesCast = 0;
+    this.state.meeting.votersAlive = [...this.state.players.values()].filter((p) => p.alive).length;
+    this.state.meeting.endsAt = Date.now() + this.state.settings.discussionSec * 1000;
+    this.meetingStageEndsAt = this.state.meeting.endsAt;
+    if (bodyId) {
+      const body = this.state.bodies.get(bodyId);
+      if (body) body.reported = true;
+    }
+    // Bodies are cleared once reported, like the genre does it.
+    if (bodyId) this.state.bodies.clear();
+    if (reason === 'emergency') {
+      caller.emergenciesLeft = Math.max(0, caller.emergenciesLeft - 1);
+      this.systemMessage(`${caller.name} hit the emergency button.`);
+    } else {
+      this.systemMessage(`${caller.name} reported a body.`);
+    }
+    this.broadcast('notice', { level: 'info', text: 'Meeting — talk it out, then vote.' });
+    this.touchRegistry();
+  }
+
+  private finishVoting(): void {
+    const tally = tallyVotes(this.votes);
+    this.state.meeting.active = false;
+    this.state.meeting.stage = '';
+    this.state.phase = 'PLAY';
+    this.votes.clear();
+
+    let ejectedName = 'nobody';
+    if (tally.ejected) {
+      const player = this.state.players.get(tally.ejected);
+      if (player) {
+        player.alive = false;
+        player.isGhost = true;
+        player.moving = false;
+        player.rolePublic = this.state.settings.revealEjectedRole
+          ? this.roles.get(player.id) ?? 'crew'
+          : 'unknown';
+        ejectedName = player.name;
+        // Ejection counts as a reveal to the ejected player themselves.
+        this.sendSecret(player.id);
+      }
+    }
+    const summary =
+      tally.ejected && ejectedName !== 'nobody'
+        ? `${ejectedName} was ejected (${tally.counts[0]?.votes ?? 0} votes).`
+        : 'No one was ejected.';
+    this.systemMessage(summary);
+    this.broadcast('verdict', {
+      ejected: tally.ejected,
+      name: ejectedName,
+      counts: tally.counts,
+      skipped: tally.skipped,
+      text: summary,
+    });
+    this.recountTasks();
+    this.checkWinNow();
+    this.touchRegistry();
+  }
+
 
   /** Back to the lobby (host action, used between games and by the harness). */
   private returnToLobby(): void {
     if (this.state.phase === 'LOBBY') return;
     this.state.phase = 'LOBBY';
     this.moveInputs.clear();
+    this.roles.clear();
+    this.tasks.clear();
+    this.votes.clear();
+    this.state.bodies.clear();
+    this.state.meeting.active = false;
+    this.state.sabotage.kind = '';
+    this.state.doorsClosedUntil = 0;
     this.touchRegistry();
     this.broadcast('notice', { level: 'info', text: 'Back in the lobby.' });
   }
@@ -504,6 +972,11 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       if (!taken.has(candidate.toLowerCase())) return candidate;
     }
     return `${desired}${Date.now() % 1000}`.slice(0, 14);
+  }
+
+  /** Alive, in a live round, not mid-meeting. */
+  private canAct(player: { alive: boolean; isGhost: boolean }): boolean {
+    return this.state.phase === 'PLAY' && player.alive && !player.isGhost;
   }
 
   private systemMessage(text: string): void {

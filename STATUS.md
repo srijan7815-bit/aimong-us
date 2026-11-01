@@ -1,6 +1,6 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M1 + M1.5 live · M2 (movement & map) COMPLETE locally, not yet pushed · next: M3 (core rules)**
+Last updated: 2026-11-01 · Milestone: **M3 (core rules) COMPLETE locally, not yet pushed · next: M4 (scripted bot bodies)**
 
 > **Live app: https://aimong-us.onrender.com** (Render free plan, singapore,
 > service `srv-dbjag6oae00c73dlkek0`, repo `github.com/srijan7815-bit/aimong-us`)
@@ -9,6 +9,24 @@ Last updated: 2026-11-01 · Milestone: **M1 + M1.5 live · M2 (movement & map) C
 > same lobby by code — 12/12 PWA checks passing against production.
 
 ## Done
+
+## M3 — core rules (complete locally)
+
+- Roles, tasks (12 real minigames), kills, bodies, reports, the Galley emergency
+  button, discussion → voting → ejection, ghosts, vents, three sabotages and every
+  win condition. Details and honest gaps: `docs/M3-REPORT.md`.
+- Rulebook as data in `packages/shared/src/game/rules.ts` (+ 48 shared tests),
+  A* pathfinding in `packages/shared/src/world/path.ts`.
+- **Measured acceptance:** PLAYTHROUGH PASS **19 checks** (7 SDK clients, a whole
+  round over the wire, roles never in public state), SMOKE PASS **22 checks**,
+  unit tests **68/68**, browser test with two real Chrome instances + the owner
+  console + 4 residents **PASS 11 checks** (a task really completed through its
+  minigame, the emergency button, meeting chat across browsers, a vote counted).
+- Fixed seven real bugs those tests found, including "winning a minigame never
+  counted" and "the task list never ticked".
+- Not pushed yet: needs a fresh GitHub token from the owner.
+- **Still stand-in:** AI players take seats and roles but stand still. They get a
+  brain in M4/M5 — the client help sheet says exactly that.
 
 - **M0 — Recon & legal:** `RESEARCH.md` (6 MIT references reviewed, licence table,
   asset plan), `THIRD_PARTY.md` (full dependency + asset ledger), no copied assets.

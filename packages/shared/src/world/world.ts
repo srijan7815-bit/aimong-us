@@ -14,7 +14,7 @@ export interface Grid {
   map: WorldMap;
 }
 
-export function buildGrid(map: WorldMap): Grid {
+export function buildGrid(map: WorldMap, options: { doorsClosed?: boolean } = {}): Grid {
   const solid = new Uint8Array(map.cols * map.rows);
   for (let y = 0; y < map.rows; y++) {
     const row = map.ascii[y] ?? '';
@@ -23,7 +23,33 @@ export function buildGrid(map: WorldMap): Grid {
       solid[y * map.cols + x] = ch === '#' || ch === ' ' ? 1 : 0;
     }
   }
+  // Closed doors are just temporary walls — same collision code, no special cases
+  // in movement or vision.
+  if (options.doorsClosed) {
+    for (const door of map.doors) {
+      const { x, y, w, h } = door.rect;
+      for (let row = y; row < y + h; row++) {
+        for (let col = x; col < x + w; col++) {
+          if (col >= 0 && row >= 0 && col < map.cols && row < map.rows) solid[row * map.cols + col] = 1;
+        }
+      }
+    }
+  }
   return { cols: map.cols, rows: map.rows, solid, map };
+}
+
+/** A grid where nothing blocks movement — used by ghosts. */
+export function openGrid(map: WorldMap): Grid {
+  return { cols: map.cols, rows: map.rows, solid: new Uint8Array(map.cols * map.rows), map };
+}
+
+/** Is a position inside a door tile? (client uses it to draw doors) */
+export function doorAt(map: WorldMap, col: number, row: number): string | null {
+  for (const door of map.doors) {
+    const { x, y, w, h } = door.rect;
+    if (col >= x && col < x + w && row >= y && row < y + h) return door.id;
+  }
+  return null;
 }
 
 export function isSolid(grid: Grid, col: number, row: number): boolean {

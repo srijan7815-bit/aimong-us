@@ -6,6 +6,15 @@
  * socket directly.
  */
 import { Client, type Room } from '@colyseus/sdk';
+
+/** Colyseus maps/arrays -> plain arrays for the view layer. */
+function collectionToArray<T>(source: unknown): T[] {
+  const out: T[] = [];
+  const collection = source as { forEach?: (cb: (v: T) => void) => void } | undefined;
+  if (collection?.forEach) collection.forEach((v) => out.push({ ...v }));
+  else if (Array.isArray(source)) out.push(...(source as T[]));
+  return out;
+}
 import { clearReconnect, loadReconnect, saveReconnect } from '../lib/prefs.js';
 import { apiUrl, serverWsUrl } from './endpoint.js';
 
@@ -25,6 +34,15 @@ export interface PlayerRow {
   ready: boolean;
   connected: boolean;
   joinedAt: number;
+  x: number;
+  y: number;
+  alive: boolean;
+  isGhost: boolean;
+  tasksDone: number;
+  tasksTotal: number;
+  killReadyAt: number;
+  emergenciesLeft: number;
+  rolePublic: string;
 }
 
 export interface ChatRow {
@@ -49,6 +67,40 @@ export interface SettingsRow {
   aiAggression: number;
 }
 
+export interface BodyRow {
+  id: string;
+  victimId: string;
+  victimName: string;
+  color: string;
+  x: number;
+  y: number;
+  killedAt: number;
+  reported: boolean;
+}
+
+export interface SabotageRow {
+  kind: string;
+  endsAt: number;
+  fixed: string[];
+}
+
+export interface MeetingRow {
+  active: boolean;
+  stage: string;
+  calledBy: string;
+  reason: string;
+  bodyId: string;
+  endsAt: number;
+  votesCast: number;
+  votersAlive: number;
+}
+
+export interface ResultRow {
+  winner: string;
+  reason: string;
+  text: string;
+}
+
 export interface LobbyView {
   code: string;
   phase: string;
@@ -58,6 +110,28 @@ export interface LobbyView {
   settings: SettingsRow;
   players: PlayerRow[];
   chat: ChatRow[];
+  // --- M3 ---
+  bodies: BodyRow[];
+  sabotage: SabotageRow;
+  meeting: MeetingRow;
+  result: ResultRow;
+  tasksRemaining: number;
+  doorsClosedUntil: number;
+}
+
+/** Private packet: role, team-mates and the task list. Never in public state. */
+export interface SecretRow {
+  role: 'crew' | 'impostor';
+  mates: Array<{ id: string; name: string }>;
+  tasks: Array<{ id: string; spotId: string; room: string; minigame: string; done: boolean }>;
+}
+
+export interface VerdictRow {
+  ejected: string | null;
+  name: string;
+  counts: Array<{ target: string; votes: number }>;
+  skipped: number;
+  text: string;
 }
 
 export interface SessionHandlers {
@@ -66,6 +140,8 @@ export interface SessionHandlers {
   onKicked: (reason: string) => void;
   onDisconnect: () => void;
   onReconnect: () => void;
+  onSecret?: (secret: SecretRow) => void;
+  onVerdict?: (verdict: VerdictRow) => void;
 }
 
 function endpoint(): string {
@@ -78,6 +154,8 @@ export class Session {
   private client = new Client(endpoint());
   room: Room<LobbyView> | null = null;
   private handlers: SessionHandlers | null = null;
+  /** Latest private packet (role + tasks). Cleared when the room is left. */
+  secret: SecretRow | null = null;
 
   setHandlers(handlers: SessionHandlers): void {
     this.handlers = handlers;
@@ -122,6 +200,11 @@ export class Session {
     saveReconnect(room.reconnectionToken, room.roomId);
 
     room.onMessage('notice', (notice: Notice) => this.handlers?.onNotice(notice));
+    room.onMessage('you', (secret: SecretRow) => {
+      this.secret = secret;
+      this.handlers?.onSecret?.(secret);
+    });
+    room.onMessage('verdict', (verdict: VerdictRow) => this.handlers?.onVerdict?.(verdict));
     room.onMessage('kicked', (payload: { reason: string }) => {
       this.handlers?.onKicked(payload.reason);
       clearReconnect();
@@ -149,6 +232,16 @@ export class Session {
       settings: { ...(state.settings as SettingsRow) },
       players,
       chat: [...(state.chat as unknown as ChatRow[])].map((c) => ({ ...c })),
+      bodies: collectionToArray<BodyRow>(state.bodies),
+      sabotage: {
+        kind: state.sabotage?.kind ?? '',
+        endsAt: state.sabotage?.endsAt ?? 0,
+        fixed: [...((state.sabotage?.fixed ?? []) as unknown as string[])],
+      },
+      meeting: { ...(state.meeting as MeetingRow) },
+      result: { ...(state.result as ResultRow) },
+      tasksRemaining: state.tasksRemaining ?? 0,
+      doorsClosedUntil: state.doorsClosedUntil ?? 0,
     };
     this.handlers?.onState(
       view,
@@ -162,6 +255,7 @@ export class Session {
 
   async leave(): Promise<void> {
     clearReconnect();
+    this.secret = null;
     try {
       await this.room?.leave(true);
     } finally {

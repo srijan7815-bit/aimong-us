@@ -7,3 +7,4 @@ export * from './version.js';
 
 export * from './cluster.js';
 export * from './world/index.js';
+export * from './game/rules.js';

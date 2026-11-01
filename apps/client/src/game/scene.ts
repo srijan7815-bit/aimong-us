@@ -20,13 +20,29 @@ import {
   type PlayerView,
 } from '@aimong/shared';
 import { grid, maskAt } from './fog.js';
+import { DARK_VISION_TILES, WORLD as MAP, buildGrid, openGrid } from '@aimong/shared';
 import { ATLAS_TEXTURE, type AtlasManifest } from './atlas.js';
+
+export interface BodyView {
+  id: string;
+  victimName: string;
+  color: string;
+  x: number;
+  y: number;
+}
 
 export interface StationBridge {
   selfId(): string;
   players(): PlayerView[];
   sendInput(seq: number, x: number, y: number): void;
   isPlaying(): boolean;
+  /** Bodies on the floor (public). */
+  bodies(): BodyView[];
+  /** 'lights' | 'reactor' | 'doors' | '' */
+  sabotage(): string;
+  doorsClosed(): boolean;
+  /** True when the local player is a ghost (walks through walls). */
+  isGhost(): boolean;
 }
 
 export interface HudState {
@@ -93,6 +109,10 @@ export class StationScene extends Phaser.Scene {
   private lastFog = 0;
 
   private terrain?: Phaser.GameObjects.Image;
+  private bodySprites = new Map<string, Phaser.GameObjects.Container>();
+  private doorLayer?: Phaser.GameObjects.Graphics;
+  private lightsOut = false;
+  private ghostMode = false;
   private lastHud = 0;
   private onHud?: (state: HudState) => void;
   /** Last fog mask painted, kept for the ?debug=1 hook. */
@@ -317,12 +337,72 @@ export class StationScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------- update
 
+  /** Draw the bodies that are currently on the floor. */
+  private syncBodies(): void {
+    const visible = new Map<string, BodyView>();
+    for (const body of this.bridge.bodies()) visible.set(body.id, body);
+    for (const [id, sprite] of this.bodySprites) {
+      if (visible.has(id)) continue;
+      sprite.destroy(true);
+      this.bodySprites.delete(id);
+    }
+    for (const [id, body] of visible) {
+      if (this.bodySprites.has(id)) continue;
+      const sprite = this.add
+        .image(0, 0, ATLAS_TEXTURE, this.frameName('body'))
+        .setOrigin(0.5, 0.5)
+        .setScale(1.2)
+        .setTint(Phaser.Display.Color.HexStringToColor(body.color).color);
+      const ring = this.add.circle(0, 0, 14).setStrokeStyle(1.5, 0xff8f9c, 0.9);
+      const label = this.add
+        .text(0, 16, body.victimName, {
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          fontSize: '8px',
+          color: '#ffb3bb',
+        })
+        .setOrigin(0.5, 0);
+      this.bodySprites.set(id, this.add.container(body.x, body.y, [ring, sprite, label]).setDepth(90));
+    }
+  }
+
+  /** Doors draw as a bright bar while a lockdown is active. */
+  private syncDoors(): void {
+    const closed = this.bridge.doorsClosed();
+    if (!closed && !this.doorLayer) return;
+    if (!this.doorLayer) {
+      this.doorLayer = this.add.graphics().setDepth(60);
+      for (const door of MAP.doors) {
+        this.doorLayer.fillStyle(0xffc53d, 0.85);
+        this.doorLayer.fillRect(
+          door.rect.x * TILE_SIZE,
+          door.rect.y * TILE_SIZE,
+          door.rect.w * TILE_SIZE,
+          door.rect.h * TILE_SIZE,
+        );
+        this.doorLayer.lineStyle(1, 0x070b14, 0.9);
+        this.doorLayer.strokeRect(
+          door.rect.x * TILE_SIZE,
+          door.rect.y * TILE_SIZE,
+          door.rect.w * TILE_SIZE,
+          door.rect.h * TILE_SIZE,
+        );
+      }
+    }
+    this.doorLayer.setVisible(closed);
+  }
+
   override update(time: number, deltaMs: number): void {
     const players = this.bridge.players();
     const self = this.bridge.selfId();
     const selfState = players.find((p) => p.id === self);
 
     this.syncPods(players);
+    this.syncBodies();
+    this.syncDoors();
+
+    // Ghosts are drawn translucent and can pass walls; crew cannot.
+    this.ghostMode = this.bridge.isGhost();
+    this.lightsOut = this.bridge.sabotage() === 'lights' && !this.ghostMode;
 
     if (selfState) {
       this.reconcile(selfState);
@@ -346,7 +426,13 @@ export class StationScene extends Phaser.Scene {
 
     if (time - this.lastFog > 100 && selfState) {
       this.lastFog = time;
-      this.paintFog(this.predicted.x, this.predicted.y);
+      this.paintFog(
+        this.predicted.x,
+        this.predicted.y,
+        this.lightsOut ? DARK_VISION_TILES : undefined,
+      );
+      const pod = this.pods.get(self);
+      if (pod) pod.container.setAlpha(this.ghostMode ? 0.45 : 1);
     }
 
     if (time - this.lastHud > 500 && this.onHud) {
@@ -428,10 +514,11 @@ export class StationScene extends Phaser.Scene {
   private stepLocal(deltaMs: number): void {
     if (!this.bridge.isPlaying()) return;
     const input = this.readInput();
+    const moveGrid = this.ghostMode ? openGrid(MAP) : this.bridge.doorsClosed() ? doorsGrid() : grid;
     let remaining = Math.min(deltaMs, 250);
     while (remaining > 0) {
       const dt = Math.min(remaining, SIM_STEP_MS);
-      const step = stepPlayer(grid, this.predicted.x, this.predicted.y, input.x, input.y, dt);
+      const step = stepPlayer(moveGrid, this.predicted.x, this.predicted.y, input.x, input.y, dt);
       this.predicted = { x: step.x, y: step.y };
       remaining -= dt;
     }
@@ -486,8 +573,8 @@ export class StationScene extends Phaser.Scene {
   }
 
   /** Paint the visibility mask: visible tiles transparent, everything else dark. */
-  private paintFog(px: number, py: number): void {
-    const mask = maskAt(px, py);
+  private paintFog(px: number, py: number, radiusTiles?: number): void {
+    const mask = maskAt(px, py, radiusTiles);
     const data = this.fogImageData.data;
     for (let i = 0; i < data.length; i += 4) {
       data[i] = 3;
@@ -518,6 +605,12 @@ export class StationScene extends Phaser.Scene {
     // Canvas textures need a nudge to re-upload after direct pixel writes.
     (this.fog.texture.source[0] as unknown as { update: () => void }).update();
   }
+}
+
+let _doorsGrid: ReturnType<typeof buildGrid> | null = null;
+function doorsGrid(): ReturnType<typeof buildGrid> {
+  if (!_doorsGrid) _doorsGrid = buildGrid(MAP, { doorsClosed: true });
+  return _doorsGrid;
 }
 
 /** Which named room a pixel position is in (null in a corridor). */

@@ -11,12 +11,17 @@ import {
   WORLD,
   buildGrid,
   computeVisionMask,
+  openGrid,
   type Grid,
   type VisionMask,
 } from '@aimong/shared';
 
 /** Built once at boot; the map never changes during a match. */
 export const GRID: Grid = buildGrid(WORLD);
+/** Same map with the four doors sealed — used while a lockdown is active. */
+export const GRID_DOORS: Grid = buildGrid(WORLD, { doorsClosed: true });
+/** Nothing blocks — ghosts drift through walls. */
+export const OPEN_GRID: Grid = openGrid(WORLD);
 
 /** What a player standing here can see, in tiles. */
 export function visibilityAt(x: number, y: number, radiusTiles?: number): VisionMask {

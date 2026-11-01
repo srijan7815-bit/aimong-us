@@ -453,7 +453,11 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
 
     // footer state
     const humans = next.players.filter((p) => !p.isAi && p.connected).length;
-    const totalSeats = humans + next.settings.aiSeats;
+    // Residents sent from the Commons are already sitting down; the host's AI-seat
+    // setting only stands in for seats nobody has taken yet.
+    const seatedAi = next.players.filter((p) => p.isAi).length;
+    const aiSeats = seatedAi > 0 ? seatedAi : next.settings.aiSeats;
+    const totalSeats = humans + aiSeats;
     readyBtn.textContent = self?.ready ? 'Ready — tap to undo' : 'I am ready';
     readyBtn.classList.toggle('btn-primary', self?.ready === true);
     readyBtn.style.display = self ? '' : 'none';
@@ -462,7 +466,7 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     const expectedImpostors = defaultImpostors(totalSeats);
     startHint.textContent = isHost
       ? totalSeats < 5
-        ? `Need 5 seats to launch — ${humans} human + ${next.settings.aiSeats} AI right now.`
+        ? `Need 5 seats to launch — ${humans} human + ${aiSeats} AI right now.`
         : `Launching with ${totalSeats} seats · ${next.settings.impostors} impostor${next.settings.impostors > 1 ? 's' : ''} (genre default: ${expectedImpostors}).`
       : 'Waiting on the host to launch.';
   }

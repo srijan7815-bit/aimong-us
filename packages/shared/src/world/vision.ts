@@ -190,6 +190,21 @@ export function canSeePoint(
   return hasLineOfSight(grid, eyeX, eyeY, targetX, targetY);
 }
 
+/**
+ * Convenience wrapper: distance + line of sight, with a radius override (used by
+ * the server when the lights are out and vision shrinks for the crew).
+ */
+export function canSeeAnywhere(
+  grid: Grid,
+  eyeX: number,
+  eyeY: number,
+  targetX: number,
+  targetY: number,
+  radiusTiles: number = VISION_RADIUS_TILES,
+): boolean {
+  return canSeePoint(grid, eyeX, eyeY, targetX, targetY, radiusTiles);
+}
+
 /** Does the segment touch the closed box of this tile? (Liang–Barsky clip.) */
 function segmentTouchesTile(
   x0: number,
