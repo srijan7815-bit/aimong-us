@@ -13,7 +13,13 @@ export interface HomeCallbacks {
   onJoin: (code: string, name: string) => Promise<void>;
   onResume: () => Promise<void>;
   onShowHelp: () => void;
+  onInstall: () => void;
   onPrefsChanged: (prefs: Prefs) => void;
+}
+
+export interface InstallState {
+  available: boolean;
+  installed: boolean;
 }
 
 export interface HomeScreen {
@@ -21,6 +27,8 @@ export interface HomeScreen {
   setName: (name: string) => void;
   setBusy: (busy: boolean, label?: string) => void;
   setError: (message: string | null) => void;
+  setInstall: (state: InstallState) => void;
+  setServerState: (ready: boolean, message: string | null) => void;
 }
 
 export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks): HomeScreen {
@@ -225,6 +233,43 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
     },
   });
 
+  // ---- install card ------------------------------------------------------
+  const installCard = el('div', { class: 'card' }, [
+    el('div', { class: 'row spread' }, [
+      el('div', {}, [
+        el('div', { class: 'setting-name', text: 'Install on your phone' }),
+        el('p', { class: 'hint', text: 'Home-screen icon, fullscreen, no address bar.' }),
+      ]),
+      el('button', {
+        class: 'btn btn-primary',
+        type: 'button',
+        text: 'Install',
+        on: {
+          click: () => {
+            haptics.play('tap');
+            cb.onInstall();
+          },
+        },
+      }),
+    ]),
+  ]);
+
+  const installedCard = el('div', { class: 'card card-tight' }, [
+    el('div', { class: 'row spread' }, [
+      el('div', {}, [
+        el('div', { class: 'setting-name', text: 'Installed app' }),
+        el('p', { class: 'hint', text: 'You are running AImong Us from your home screen.' }),
+      ]),
+      el('span', { class: 'chip chip-ready', text: 'ON' }),
+    ]),
+  ]);
+  installCard.style.display = 'none';
+  installedCard.style.display = 'none';
+
+  // ---- server state ------------------------------------------------------
+  const serverNote = el('div', { class: 'banner banner-info', role: 'status' });
+  serverNote.style.display = 'none';
+
   const node = el('div', { class: 'screen' }, [
     el('div', { class: 'brand' }, [
       el('div', { html: brandMarkSvg() }),
@@ -250,6 +295,9 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
     ]),
 
     resumeBtn,
+    installCard,
+    installedCard,
+    serverNote,
     errorNode,
     el('div', { class: 'footer-note' }, [
       helpBtn,
@@ -267,5 +315,17 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
     },
     setBusy,
     setError,
+    setInstall: (state: InstallState) => {
+      installedCard.style.display = state.installed ? 'block' : 'none';
+      installCard.style.display = !state.installed && state.available ? 'block' : 'none';
+    },
+    setServerState: (ready: boolean, message: string | null) => {
+      if (ready && !message) {
+        serverNote.style.display = 'none';
+        return;
+      }
+      serverNote.style.display = 'block';
+      serverNote.textContent = message ?? 'Cannot reach the station yet — check your connection.';
+    },
   };
 }

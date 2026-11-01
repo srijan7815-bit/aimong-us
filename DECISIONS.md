@@ -69,3 +69,31 @@ explicitly decide lives here (INSTRUCTIONS §0.2).
 17. **Cost model is a first-class constraint**, so the gateway will enforce:
     per-game cap → at 80% switch every seat to the cheapest tier → at 100% drop to
     scripted autopilot (game stays playable, no surprise bill).
+
+## 2026-11-01 — installable phone app (owner request after M1)
+
+18. **Ship as a PWA, not a wrapped APK.** The owner wants it "as a mobile game on
+    my phone" talking to the Render server. A home-screen PWA (manifest +
+    maskable icons + standalone display) installs in one tap from Chrome, gets a
+    real launcher icon, runs fullscreen, and needs no Play Store, no signing
+    keys, no build pipeline. A TWA wrapper stays a v1.1 stretch goal (it would
+    need an Android build box and a signing key I do not have).
+19. **Service worker caches the shell, never the game.** Navigations are
+    network-first with a cached fallback (so the icon always opens, even offline
+    or while Render wakes); content-hashed `/assets/*` are cache-first;
+    `/api/*`, `/matchmake*` and `/healthz` are never cached. Bump
+    `CACHE_VERSION` when the shell changes.
+20. **Cold start is a feature, not an error.** Free Render instances sleep after
+    ~15 min idle. The app paints a boot screen before JS, pings `/healthz` with
+    backoff for up to 90 s, says "Waking up the station…", and auto-continues.
+    Offline is detected instantly instead of spinning.
+21. **Free plan by default.** No card required; `DEPLOY.md` documents the
+    one-click switch to Starter (or a free UptimeRobot ping) for game nights.
+22. **Icons are generated, original, and committed.** `scripts/gen-icons.py`
+    draws them with Pillow from the same vector language as the pod-bots
+    (supersampled, no SVG rasteriser or browser needed at build time). Committed
+    PNGs mean the Render build has zero image tooling.
+23. **Deploy automation is scripted and reusable.** `scripts/deploy-render.mjs`
+    creates/reuses the GitHub repo, pushes `main`, creates/reuses the Render
+    service, and waits for `/healthz`. Runs only with tokens the owner supplies;
+    no secret is ever written to disk.

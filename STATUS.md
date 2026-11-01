@@ -1,6 +1,6 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M1 complete, M2 next**
+Last updated: 2026-11-01 · Milestone: **M1 complete (+ installable PWA), M2 next**
 
 ## Done
 
@@ -19,6 +19,16 @@ Last updated: 2026-11-01 · Milestone: **M1 complete, M2 next**
   - Tests: 22 unit tests (shared + server), scripted 2-client smoke test
     (`apps/server/scripts/smoke.ts`), real headless-browser 2-phone test.
 - Screenshots of the working lobby in `docs/shots/`.
+- **Installable app (PWA) — added after the M1 report at the owner's request:**
+  manifest + maskable icons + splash screens generated from the in-repo pod-bot
+  vector (`scripts/gen-icons.py`), service worker (network-first shell,
+  immutable hashed assets, never caches game traffic), home-screen install card,
+  app shortcuts (Create / Join), fullscreen standalone launch, offline shell with
+  a plain-language message, and a cold-start screen that pings `/healthz` and
+  retries while a sleeping Render instance wakes.
+- `DEPLOY.md` (exact Render + phone-install steps) and
+  `scripts/deploy-render.mjs` (one-command GitHub repo + Render service + health
+  wait) ready for the owner's tokens. **Untested: needs real tokens.**
 
 ## In progress
 
@@ -35,9 +45,13 @@ Last updated: 2026-11-01 · Milestone: **M1 complete, M2 next**
 
 ## Known issues / gaps (honest list)
 
-- **Not deployed to Render yet** — needs the owner to create the service from
-  `render.yaml` and paste `PUBLIC_URL` (+ keys later). Until then the build is
-  verified locally only.
+- **Not deployed to Render yet** — needs the owner's GitHub/Render access
+  (blueprint path documented in `DEPLOY.md`, or hand me tokens and I do it).
+  `scripts/deploy-render.mjs` is written but has never run against the real API.
+- Install prompt only appears for real browsers over HTTPS with
+  `beforeinstallprompt`; on desktop headless it is simulated in tests. The
+  "Install" card falls back to written instructions when the browser does not
+  offer it.
 - **No ESLint** (see DECISIONS §13); Prettier + `tsc --strict` + vitest only.
 - **Start button does not launch a game** (deliberate — no simulation until M2/M3).
 - AI seats are configured but not instantiated; no AI players exist in the lobby

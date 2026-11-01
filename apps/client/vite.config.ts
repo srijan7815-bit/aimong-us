@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 /**
@@ -8,6 +9,13 @@ import { defineConfig } from 'vite';
 const SERVER = process.env.SERVER_URL ?? 'http://localhost:2567';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Bundle the shared package from source: no stale dist, no build ordering
+      // trap when you just want to look at the UI.
+      '@aimong/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

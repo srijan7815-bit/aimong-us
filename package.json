@@ -8,12 +8,15 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "predev": "pnpm --filter @aimong/shared build",
     "build": "pnpm -r build",
     "start": "pnpm --filter @aimong/server start",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "sim": "pnpm --filter @aimong/server sim"
+    "pretest": "pnpm --filter @aimong/shared build",
+    "sim": "pnpm --filter @aimong/server sim",
+    "icons": "python3 scripts/gen-icons.py"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

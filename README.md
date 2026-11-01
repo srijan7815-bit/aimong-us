@@ -5,9 +5,17 @@ alongside AI players that have their own names, personalities and (later) their
 own underlying models. Friends-only: no accounts, no matchmaking, just a 5-letter
 room code.
 
-**Current build: M1 — lobby works end to end.** Movement, tasks, kills, meetings
-and the AI brains land in M2–M8 (see `PLAN.md`). The Start button says so instead
-of pretending.
+**Current build: M1 — the lobby works end to end, and it installs on your phone
+as an app.** Movement, tasks, kills, meetings and the AI brains land in M2–M8
+(see `PLAN.md`). The Start button says so instead of pretending.
+
+## It's an app on your phone
+
+Open the deployed URL in Chrome on Android → tap **Install** in the game (or ⋮ →
+*Add to Home screen*). You get a pod-bot on your home screen that opens
+fullscreen and talks to the Render server, reconnects after a phone lock, and
+still opens (with a plain message) when you are offline or the free server is
+asleep. Full steps: `DEPLOY.md`.
 
 ## Run it locally
 
@@ -47,6 +55,10 @@ pnpm dev        # Vite on :5173 (proxies to the API/WebSocket on :2567) + server
 
 ## Deploy (Render, one instance)
 
+> **Fastest path:** `GITHUB_TOKEN=… RENDER_API_KEY=… node scripts/deploy-render.mjs`
+> — it creates the repo, pushes, creates the service and waits for `/healthz`.
+> Manual steps (blueprint): `DEPLOY.md`.
+
 `render.yaml` is a blueprint: **New → Blueprint** in Render, point it at this
 repo, and paste these values in the dashboard when asked (never in git):
 
@@ -68,6 +80,8 @@ game night.
 | `config/game.defaults.json` | player counts, timers, vision, AI cadence, cost cap |
 | `config/personas.json` | the 12 AI personalities |
 | `config/roster.json` | which models sit in which seat (`fast` vs `smart` tiers) |
+| `apps/client/public/manifest.webmanifest` | app name, icons, shortcuts, fullscreen behaviour |
+| `scripts/gen-icons.py` | regenerates the home-screen icons (`pnpm icons`) |
 | `prompts/brain.md` | the AI system/user prompt templates |
 | `.env` / Render env | `MAX_COST_USD_PER_GAME`, `MAX_ROOMS`, `LOG_LEVEL`, provider keys |
 
