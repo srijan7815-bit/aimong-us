@@ -92,11 +92,15 @@ async function main() {
   if (!/You are Crew/.test(roleText)) throw new Error(`role card said: ${roleText.slice(0, 80)}`);
   check('practice round started and the role card named the role');
 
-  const look = await page.evaluate(() => {
-    const pods = window.__station?.pods() ?? [];
-    const me = pods.find((p) => p.self);
-    return me?.cosmetics ?? '';
-  });
+  // The role card is DOM and appears before the Phaser scene has finished
+  // booting, so wait for the self pod rather than reading an empty list.
+  const look = await page
+    .waitForFunction(
+      () => (window.__station?.pods() ?? []).find((p) => p.self)?.cosmetics ?? false,
+      null,
+      { timeout: 30000 },
+    )
+    .then((handle) => handle.jsonValue());
   if (!look.includes('crown') || !look.includes('pup')) {
     throw new Error(`station drew cosmetics "${look}"`);
   }

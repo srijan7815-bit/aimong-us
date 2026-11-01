@@ -47,7 +47,10 @@ async function main(): Promise<void> {
 
   const owner = new Client(WS);
   const room1 = await owner.create('game', { name: 'Owner' });
-  await wait(150);
+  // The first patch can take longer than a local round trip (the free instance is
+  // in Singapore), so wait for the code instead of assuming 150 ms is enough.
+  const codeDeadline = Date.now() + 8000;
+  while (!room1.state.code && Date.now() < codeDeadline) await wait(50);
   const code = room1.state.code as string;
   if (!/^[A-HJ-NP-Z2-9]{5}$/.test(code)) throw new Error(`bad code: ${code}`);
   checks.push(`created room with code ${code}`);

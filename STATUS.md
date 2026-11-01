@@ -23,10 +23,16 @@ Last updated: 2026-11-01 · Milestone: **M3.5 (full role + feature set) COMPLETE
   (hats/skins/pets/nameplates) with a device-saved picker.
 - **New HUD:** role card, ability bar with live cooldowns and truthful refusals,
   category chips + stage counters, tool sheets, sabotage pointers, ghost chat.
-- **Measured acceptance:** M3.5 PLAYTHROUGH PASS **21 checks** (8 SDK clients, no
-  role ever in public state), SMOKE PASS **22 checks**, unit tests **93/93**,
-  browser test **PASS 8 checks** (cosmetics → practice → role card → task
-  categories → room-gated tools → admin table).
+- **Measured acceptance (local):** M3.5 PLAYTHROUGH PASS **21 checks** (8 SDK
+  clients, no role ever in public state), SMOKE PASS **22 checks**, unit tests
+  **93/93**, browser test **PASS 8 checks**.
+- **Verified LIVE** on `https://aimong-us.onrender.com` after the deploy of
+  `6d0ccc3`: `/healthz` = `M3.5 / 0.5.0`, the 21-check wire playthrough **PASS**,
+  the 8-check browser test **PASS**. The smoke test stops at its owner-console step
+  in production because no `CONSOLE_KEY` is set there (fails closed by design).
+- **Deploy gotcha fixed:** pnpm 12 refuses a lockfile without its own
+  `packageManagerDependencies`, so the committed `pnpm-lock.yaml` is now pnpm
+  12.16.1's output and Playwright is not a repo dependency (`DECISIONS.md` 26).
 - Fixed six real bugs the tests found, two of them in the shared walker (details
   in `docs/M3.5-REPORT.md`).
 - **Still stand-in:** AI players take seats and roles but stand still; Tier 2 roles
