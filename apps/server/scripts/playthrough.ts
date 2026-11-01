@@ -58,7 +58,9 @@ async function waitFor(predicate: () => boolean, label: string, timeoutMs = 8000
  * Walk a player to a world position by sending real input vectors along an A*
  * path — the same route-following the M4 bodies will use.
  */
-async function walkTo(seat: Seat, x: number, y: number, timeoutMs = 25000): Promise<void> {
+async function walkTo(seat: Seat, x: number, y: number, opts: { stopWithin?: number; timeoutMs?: number } = {}): Promise<void> {
+  const stopWithin = opts.stopWithin ?? 14;
+  const timeoutMs = opts.timeoutMs ?? 40000;
   const started = Date.now();
   let seq = 0;
   let path = findPath(grid, seat.room.state.players.get(seat.room.sessionId)?.x ?? 0, seat.room.state.players.get(seat.room.sessionId)?.y ?? 0, x, y);
@@ -67,11 +69,12 @@ async function walkTo(seat: Seat, x: number, y: number, timeoutMs = 25000): Prom
   let improvedAt = Date.now();
   let repathedAt = 0;
   let sidestep = 0;
+  let slideSign = 1;
   while (Date.now() - started < timeoutMs) {
     const player = seat.room.state.players.get(seat.room.sessionId);
     if (!player) break;
     const distance = Math.hypot(player.x - x, player.y - y);
-    if (distance < 14) {
+    if (distance < stopWithin) {
       seq += 1;
       seat.room.send('input', { seq, x: 0, y: 0 });
       await wait(60);
@@ -97,14 +100,17 @@ async function walkTo(seat: Seat, x: number, y: number, timeoutMs = 25000): Prom
     }
     let vx = waypoint.x - player.x;
     let vy = waypoint.y - player.y;
-    if (now - improvedAt > 2500) {
-      // Wedged: slide sideways for a few ticks, then carry on.
-      sidestep = 6;
+    if (now - improvedAt > 1200) {
+      // Wedged: slide sideways for a few ticks, then carry on. Over a slow
+      // link (this runs against Render too) a stall is usually a corner, so
+      // alternate the slide direction instead of repeating the same wall.
+      sidestep = 8;
+      slideSign = -slideSign;
       improvedAt = now;
     }
     if (sidestep > 0) {
       sidestep -= 1;
-      [vx, vy] = [-vy, vx];
+      [vx, vy] = [-vy * slideSign, vx * slideSign];
       if (Math.hypot(vx, vy) < 0.001) {
         vx = 1;
         vy = 0;
@@ -223,7 +229,7 @@ async function main(): Promise<void> {
 
   // walk together, then kill
   const victimPlayer = victim.room.state.players.get(victimId);
-  await walkTo(killer, victimPlayer.x, victimPlayer.y);
+  await walkTo(killer, victimPlayer.x, victimPlayer.y, { stopWithin: 32 });
   await waitFor(() => {
     const my = killer.room.state.players.get(killerId);
     const them = killer.room.state.players.get(victimId);
