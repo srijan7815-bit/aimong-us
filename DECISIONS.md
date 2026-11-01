@@ -291,3 +291,34 @@ can see into the page.
     (`npm i -g pnpm@12.16.1 && pnpm install`), never with the sandbox's pnpm 9,
     or the Render deploy fails at the install step. Playwright stays out of the
     repo for the same reason: its install step downloads browsers.
+
+## 2026-11-01 — M4/M5 (residents with bodies and voices)
+
+27. **NIM model choice is empirical, not aspirational.** Most ids in
+    `GET /v1/models` are not entitled on this key (404 "Function … not found"),
+    several well-known ones are **end-of-life** (`meta/llama-3.1-8b-instruct`,
+    `meta/llama-3.3-70b-instruct` → 410), and the newest reasoning models
+    (`nemotron-3.5-lightning-30b-a3b`) return an *empty* `content` because every
+    token goes to `reasoning_tokens`. `nvidia/nemotron-3.5-bolt-e4b` answers with
+    real content in ~0.4–0.7 s, so it is used for **both** tiers (play + meeting)
+    until a better entitled model exists. An empty `content` is treated as a
+    failed call, so a seat never "thinks" silently in place of talking.
+28. **One gateway, no SDKs.** Everything we call speaks OpenAI
+    chat-completions, so the gateway is one `fetch` with a provider table, a
+    token bucket (NIM 30 rpm of its ~40 free), `MAX_LLM_CONCURRENCY`
+    backpressure (a skipped call simply means the resident thinks again next
+    tick), and a 20 s abort. When nothing is configured the gateway says
+    `offline` and the residents stay silent rather than faking a message.
+29. **Rules moved out of the socket handlers.** `resolveKill`, `completeTask`,
+    `tryFix`, `startSabotage`, `tryReport`, `castVote` are now room methods; the
+    `onMessage` handlers and the AI driver both call them. This is what makes
+    "the bots cheat?" answerable: they cannot, because they have no second code
+    path. Residents act only through `AiPort`, which owns no rules.
+30. **Residents think rarely, talk when it matters.** Play-time model calls run
+    every 14–24 s per seat and only steer coarse intent; the discussion phase
+    gets the budget (two lines per resident per meeting). Duplicate lines are
+    filtered room-wide so four residents never say the same sentence.
+31. **The driver never trusts the model.** `say` must be non-empty and unique;
+    `intent.target` is honoured only when it names a seat the model could legally
+    act on; everything structural (walking, cooldowns, kill range, task
+    presence) stays deterministic. A hallucinating brain cannot break a rule.

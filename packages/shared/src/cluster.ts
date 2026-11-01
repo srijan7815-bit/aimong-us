@@ -58,9 +58,24 @@ export interface ResidentView {
   voiceReady: boolean;
 }
 
+/** Live gateway numbers, so the owner can see the brain is actually thinking. */
+export interface BrainView {
+  /** 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'mock', or 'offline'. */
+  model: string;
+  calls: number;
+  ok: number;
+  failed: number;
+  tokens: number;
+  costUsd: number;
+  /** Milliseconds of the last successful call. */
+  lastMs: number;
+}
+
 export interface ClusterSnapshot {
   /** True when at least one LLM provider key is configured. */
   brainOnline: boolean;
+  /** Optional so an older client can still read a newer snapshot. */
+  brain?: BrainView;
   residents: ResidentView[];
   messages: ClusterMessage[];
   /** Room code the house was last sent to. */

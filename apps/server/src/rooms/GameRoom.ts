@@ -59,6 +59,7 @@ import {
   totalSteps,
   tallyVotes,
   canSeeAnywhere,
+  findPath,
   type AbilityClock,
   type AbilityId,
   type Role,
@@ -69,6 +70,9 @@ import {
   type Cosmetics,
 } from '@aimong/shared';
 import { BodyState } from './state.js';
+import { AiDriver, type AiPort } from '../ai/driver.js';
+import type { AiSeatView } from '../ai/brain.js';
+import { gateway } from '../ai/llm.js';
 import { getAppConfig } from '../app-config.js';
 import { logger } from '../logger-instance.js';
 
@@ -123,6 +127,8 @@ export class GameRoom extends Room<{ state: LobbyState }> {
   private meetingStageEndsAt = 0;
   private matchEnded = false;
   private rngSeed = Date.now() % 2147483647;
+  /** Residents' body + brain. Null when this build has no gateway. */
+  private ai: AiDriver | null = null;
 
   override onCreate(): void {
     const cfg = getAppConfig();
@@ -172,6 +178,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     });
 
     this.registerHandlers();
+    this.ai = new AiDriver(this.aiPort(), gateway());
     this.setSimulationInterval((deltaMs) => this.tick(deltaMs), SIM_STEP_MS);
     registerRoom(this);
     logger.info({ roomId: this.roomId, code: this.code }, 'room created');
@@ -443,48 +450,12 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     this.onMessage('kill', (client, raw) => {
       const killer = this.state.players.get(client.sessionId);
       if (!killer || !this.canAct(killer)) return;
-      if (this.roles.get(killer.id) !== 'impostor') return;
-      if (Date.now() < killer.killReadyAt) return;
       const msg = ClientMessages.kill.safeParse(raw);
       if (!msg.success) return;
-      const victim = this.state.players.get(msg.data.target);
-      if (!victim || !victim.alive) return;
-      if (this.roles.get(victim.id) === 'impostor') return;
-      const range = this.state.settings.killRange * 32;
-      if (Math.hypot(victim.x - killer.x, victim.y - killer.y) > range) {
-        this.notice(client, 'warn', 'Too far away.');
-        return;
-      }
-      // A warden's shield eats the kill (and the killer still pays the cooldown).
-      const shieldUntil = this.shields.get(victim.id) ?? 0;
-      if (shieldUntil > Date.now()) {
-        this.shields.delete(victim.id);
-        victim.shieldUntil = 0;
-        killer.killReadyAt = Date.now() + this.state.settings.killCooldownSec * 1000;
-        this.notice(client, 'warn', 'A ward took that hit.');
-        this.noticeFor(victim.id, 'info', 'Your ward absorbed a kill.');
-        return;
-      }
-      victim.alive = false;
-      victim.isGhost = true;
-      victim.moving = false;
-      killer.killReadyAt = Date.now() + this.state.settings.killCooldownSec * 1000;
-      this.spawnBody(victim.id);
-      this.sendSecret(victim.id);
-      const witnesses = [...this.state.players.values()].filter(
-        (p) =>
-          p.id !== killer.id &&
-          p.id !== victim.id &&
-          p.alive &&
-          canSeeAnywhere(GRID, p.x, p.y, victim.x, victim.y,
-            this.state.sabotage.kind === 'lights' ? DARK_VISION_TILES : undefined),
-      );
-      if (witnesses.length > 0) {
-        // Only the killer's client learns that someone saw — never who.
-        this.notice(client, 'info', 'Someone may have seen that.');
-      }
-      this.recountTasks();
-      this.checkWinNow();
+      const result = this.resolveKill(killer, msg.data.target);
+      if (result === 'too-far') this.notice(client, 'warn', 'Too far away.');
+      if (result === 'warded') this.notice(client, 'warn', 'A ward took that hit.');
+      if (result === 'witnessed') this.notice(client, 'info', 'Someone may have seen that.');
     });
 
     this.onMessage('vent', (client, raw) => {
@@ -530,10 +501,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       if (!reporter || !this.canAct(reporter)) return;
       const msg = ClientMessages.report.safeParse(raw);
       if (!msg.success) return;
-      const body = this.state.bodies.get(msg.data.bodyId);
-      if (!body) return;
-      if (Math.hypot(body.x - reporter.x, body.y - reporter.y) > 64) return;
-      this.callMeeting(reporter.id, 'report', body.id);
+      this.tryReport(reporter, msg.data.bodyId);
     });
 
     this.onMessage('lobby', (client) => {
@@ -581,45 +549,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
         logger.debug({ raw }, 'taskDone refused: bad payload');
         return;
       }
-      const list = this.tasks.get(player.id) ?? [];
-      const task = list.find((t) => t.id === msg.data.taskId);
-      if (!task || task.done) {
-        logger.debug({ player: player.name, taskId: msg.data.taskId }, 'taskDone refused: no such task');
-        return;
-      }
-      const spot = WORLD.taskSpots.find((s) => s.id === task.spotId);
-      if (!spot) return;
-      // Server enforces presence: you must be standing on the task spot.
-      const sx = spot.tile.x * 32 + 16;
-      const sy = spot.tile.y * 32 + 16;
-      if (Math.hypot(player.x - sx, player.y - sy) > 56) {
-        logger.debug(
-          { player: player.name, spot: spot.id, dist: Math.round(Math.hypot(player.x - sx, player.y - sy)) },
-          'taskDone refused: too far',
-        );
-        return;
-      }
-      // A long task is two minigames at the same console: advance the stage and
-      // only mark it done on the last one.
-      task.stage += 1;
-      if (task.stage >= taskSteps(task)) {
-        task.done = true;
-        task.stage = taskSteps(task);
-      }
-      // Visual tasks leave a public "doing something" marker for a few seconds:
-      // that is the alibi, and it is the only task information anyone else gets.
-      if (task.category === 'visual' && this.state.settings.visualTasks && player.alive) {
-        player.visualTaskUntil = Date.now() + 4000;
-      }
-      const credited = list.reduce((sum, t) => sum + (t.done ? taskSteps(t) : t.stage), 0);
-      player.tasksDone = credited;
-      player.tasksTotal = totalSteps(list);
-      this.recountTasks();
-      // The task list is private, so the client only learns about the tick when
-      // the server re-sends 'you'. Without this the HUD stays stale forever.
-      this.sendSecret(player.id);
-      logger.debug({ player: player.name, spot: spot.id, done: task.done }, 'task step');
-      this.checkWinNow();
+      this.completeTask(player, msg.data.taskId);
     });
 
     this.onMessage('fix', (client, raw) => {
@@ -628,26 +558,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       if (this.roles.get(player.id) !== 'impostor' && !this.state.sabotage.kind) return;
       const msg = ClientMessages.fix.safeParse(raw);
       if (!msg.success) return;
-      const spec = SABOTAGE_SPECS[this.state.sabotage.kind as SabotageKind];
-      if (!spec || !spec.fixSpots.includes(msg.data.spotId)) return;
-      const spot = WORLD.taskSpots.find((s) => s.id === msg.data.spotId);
-      if (!spot) return;
-      const sx = spot.tile.x * 32 + 16;
-      const sy = spot.tile.y * 32 + 16;
-      if (Math.hypot(player.x - sx, player.y - sy) > 56) return;
-      if (this.sabotageFixed.has(msg.data.spotId)) return;
-      this.sabotageFixed.add(msg.data.spotId);
-      this.state.sabotage.fixed.push(msg.data.spotId);
-      const needed = fixesNeeded(spec);
-      if (this.sabotageFixed.size >= needed) {
-        this.state.sabotage.kind = '';
-        this.state.sabotage.endsAt = 0;
-        this.state.sabotage.fixed.clear();
-        this.sabotageFixed.clear();
-        this.systemMessage(`${spec.label} fixed. Nice work.`);
-      } else {
-        this.systemMessage(`${spec.label}: ${this.sabotageFixed.size}/${needed} fixed.`);
-      }
+      this.tryFix(player, msg.data.spotId);
     });
 
     this.onMessage('sabotage', (client, raw) => {
@@ -657,22 +568,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       if (this.state.sabotage.kind) return;
       const msg = ClientMessages.sabotage.safeParse(raw);
       if (!msg.success) return;
-      const spec = SABOTAGE_SPECS[msg.data.kind];
-      this.state.sabotage.kind = spec.kind;
-      this.state.sabotage.endsAt = Date.now() + spec.durationSec * 1000;
-      this.state.sabotage.fixed.clear();
-      this.sabotageFixed.clear();
-      if (spec.kind === 'doors') {
-        this.state.doorsClosedUntil = Date.now() + spec.durationSec * 1000;
-      }
-      if (spec.blocksInfo) this.state.taskBarVisible = false;
-      // Sabotage shortens everyone's kill cooldown: the killer is free to move.
-      this.state.players.forEach((p) => {
-        if (this.roles.get(p.id) === 'impostor' && p.alive) p.killReadyAt = 0;
-      });
-      this.systemMessage(`⚠ ${spec.label}.`);
-      this.broadcast('notice', { level: 'warn', text: `${spec.label} — ${spec.durationSec}s.` });
-      this.touchRegistry();
+      this.startSabotage(player, msg.data.kind);
     });
 
     this.onMessage('vote', (client, raw) => {
@@ -681,8 +577,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       if (this.state.phase !== 'MEETING' || this.state.meeting.stage !== 'VOTING') return;
       const msg = ClientMessages.vote.safeParse(raw);
       if (!msg.success) return;
-      this.votes.set(voter.id, msg.data.target);
-      this.state.meeting.votesCast = this.votes.size;
+      this.castVote(voter, msg.data.target);
     });
 
     // ---- M3.5: role abilities and station tools ----
@@ -725,13 +620,324 @@ export class GameRoom extends Room<{ state: LobbyState }> {
   }
 
   /** One authoritative simulation step. Called 20 times a second. */
+  // ------------------------------------------------ shared action rules
+  //
+  // These used to live inside the socket handlers. Residents take the same
+  // actions as humans, so the rules moved here: one implementation, two callers
+  // (the `onMessage` handler and the AI driver). Anything a bot can do, a human
+  // can do, and vice versa.
+
+  /** Kill resolution shared by the socket handler and the AI driver. */
+  private resolveKill(killer: PlayerState, targetId: string): 'ok' | 'too-far' | 'warded' | 'witnessed' | 'illegal' {
+    if (!this.canAct(killer)) return 'illegal';
+    if (this.roles.get(killer.id) !== 'impostor') return 'illegal';
+    if (Date.now() < killer.killReadyAt) return 'illegal';
+    const victim = this.state.players.get(targetId);
+    if (!victim || !victim.alive) return 'illegal';
+    if (this.roles.get(victim.id) === 'impostor') return 'illegal';
+    const range = this.state.settings.killRange * 32;
+    if (Math.hypot(victim.x - killer.x, victim.y - killer.y) > range) return 'too-far';
+    // A warden's shield eats the kill (and the killer still pays the cooldown).
+    const shieldUntil = this.shields.get(victim.id) ?? 0;
+    if (shieldUntil > Date.now()) {
+      this.shields.delete(victim.id);
+      victim.shieldUntil = 0;
+      killer.killReadyAt = Date.now() + this.state.settings.killCooldownSec * 1000;
+      this.noticeFor(victim.id, 'info', 'Your ward absorbed a kill.');
+      return 'warded';
+    }
+    victim.alive = false;
+    victim.isGhost = true;
+    victim.moving = false;
+    killer.killReadyAt = Date.now() + this.state.settings.killCooldownSec * 1000;
+    this.spawnBody(victim.id);
+    this.sendSecret(victim.id);
+    const witnesses = [...this.state.players.values()].filter(
+      (p) =>
+        p.id !== killer.id &&
+        p.id !== victim.id &&
+        p.alive &&
+        canSeeAnywhere(
+          this.gridFor(p),
+          p.x,
+          p.y,
+          victim.x,
+          victim.y,
+          this.state.sabotage.kind === 'lights' ? DARK_VISION_TILES : undefined,
+        ),
+    );
+    this.recountTasks();
+    this.checkWinNow();
+    return witnesses.length > 0 ? 'witnessed' : 'ok';
+  }
+
+  /** One step of a task, with the presence check the server has always done. */
+  private completeTask(player: PlayerState, taskId: string): boolean {
+    if (this.state.phase !== 'PLAY') return false;
+    if (this.roles.get(player.id) !== 'crew') return false;
+    if (!player.alive && !this.state.settings.ghostChat) return false;
+    const list = this.tasks.get(player.id) ?? [];
+    const task = list.find((t) => t.id === taskId);
+    if (!task || task.done) return false;
+    const spot = WORLD.taskSpots.find((s) => s.id === task.spotId);
+    if (!spot) return false;
+    const sx = spot.tile.x * 32 + 16;
+    const sy = spot.tile.y * 32 + 16;
+    if (Math.hypot(player.x - sx, player.y - sy) > 56) return false;
+    // A long task is two minigames at the same console: advance the stage and
+    // only mark it done on the last one.
+    task.stage += 1;
+    if (task.stage >= taskSteps(task)) {
+      task.done = true;
+      task.stage = taskSteps(task);
+    }
+    // Visual tasks leave a public "doing something" marker for a few seconds:
+    // that is the alibi, and it is the only task information anyone else gets.
+    if (task.category === 'visual' && this.state.settings.visualTasks && player.alive) {
+      player.visualTaskUntil = Date.now() + 4000;
+    }
+    player.tasksDone = list.reduce((sum, t) => sum + (t.done ? taskSteps(t) : t.stage), 0);
+    player.tasksTotal = totalSteps(list);
+    this.recountTasks();
+    // The task list is private, so the client only learns about the tick when
+    // the server re-sends 'you'. Without this the HUD stays stale forever.
+    this.sendSecret(player.id);
+    logger.debug({ player: player.name, spot: spot.id, done: task.done }, 'task step');
+    this.checkWinNow();
+    return true;
+  }
+
+  /** Fix one point of the active sabotage. */
+  private tryFix(player: PlayerState, spotId: string): boolean {
+    if (!this.canAct(player)) return false;
+    const spec = SABOTAGE_SPECS[this.state.sabotage.kind as SabotageKind];
+    if (!spec || !spec.fixSpots.includes(spotId)) return false;
+    const spot = WORLD.taskSpots.find((s) => s.id === spotId);
+    if (!spot) return false;
+    const sx = spot.tile.x * 32 + 16;
+    const sy = spot.tile.y * 32 + 16;
+    if (Math.hypot(player.x - sx, player.y - sy) > 56) return false;
+    if (this.sabotageFixed.has(spotId)) return false;
+    this.sabotageFixed.add(spotId);
+    this.state.sabotage.fixed.push(spotId);
+    const needed = fixesNeeded(spec);
+    if (this.sabotageFixed.size >= needed) {
+      this.state.sabotage.kind = '';
+      this.state.sabotage.endsAt = 0;
+      this.state.sabotage.fixed.clear();
+      this.sabotageFixed.clear();
+      this.systemMessage(`${spec.label} fixed. Nice work.`);
+    } else {
+      this.systemMessage(`${spec.label}: ${this.sabotageFixed.size}/${needed} fixed.`);
+    }
+    return true;
+  }
+
+  /** Start a sabotage. Shared so residents follow the same gate as humans. */
+  private startSabotage(player: PlayerState, kind: SabotageKind): boolean {
+    if (!this.canAct(player)) return false;
+    if (this.roles.get(player.id) !== 'impostor') return false;
+    if (this.state.sabotage.kind) return false;
+    const spec = SABOTAGE_SPECS[kind];
+    if (!spec) return false;
+    this.state.sabotage.kind = spec.kind;
+    this.state.sabotage.endsAt = Date.now() + spec.durationSec * 1000;
+    this.state.sabotage.fixed.clear();
+    this.sabotageFixed.clear();
+    if (spec.kind === 'doors') {
+      this.state.doorsClosedUntil = Date.now() + spec.durationSec * 1000;
+    }
+    if (spec.blocksInfo) this.state.taskBarVisible = false;
+    // Sabotage shortens everyone's kill cooldown: the killer is free to move.
+    this.state.players.forEach((p) => {
+      if (this.roles.get(p.id) === 'impostor' && p.alive) p.killReadyAt = 0;
+    });
+    this.systemMessage(`\u26a0 ${spec.label}.`);
+    this.broadcast('notice', { level: 'warn', text: `${spec.label} \u2014 ${spec.durationSec}s.` });
+    this.touchRegistry();
+    return true;
+  }
+
+  /** Report a body you are standing next to. */
+  private tryReport(reporter: PlayerState, bodyId: string): boolean {
+    if (!this.canAct(reporter)) return false;
+    if (this.state.phase !== 'PLAY') return false;
+    const body = this.state.bodies.get(bodyId);
+    if (!body || body.reported) return false;
+    if (Math.hypot(body.x - reporter.x, body.y - reporter.y) > 64) return false;
+    this.callMeeting(reporter.id, 'report', body.id);
+    return true;
+  }
+
+  /** Record a vote (null = skip). */
+  private castVote(voter: PlayerState, target: string | null): boolean {
+    if (!voter.alive) return false;
+    if (this.state.phase !== 'MEETING' || this.state.meeting.stage !== 'VOTING') return false;
+    if (target) {
+      const other = this.state.players.get(target);
+      if (!other || !other.alive) return false;
+    }
+    this.votes.set(voter.id, target);
+    this.state.meeting.votesCast = this.votes.size;
+    return true;
+  }
+
+  // -------------------------------------------------------- AI: the port
+  //
+  // GameRoom implements AiPort so the driver can act through the rules above
+  // without owning any of them. Everything a resident can see passes the same
+  // fog check the clients use.
+
+  private aiSeatView(player: PlayerState): AiSeatView {
+    return {
+      id: player.id,
+      name: player.visibleName || player.name,
+      colorName: player.colorName,
+      x: player.x,
+      y: player.y,
+      alive: player.alive,
+      isAi: player.isAi,
+      tasksDone: player.tasksDone,
+      tasksTotal: player.tasksTotal,
+      killReadyAt: player.killReadyAt,
+    };
+  }
+
+  private aiPort(): AiPort {
+    const self = this;
+    return {
+      now: () => Date.now(),
+      phase: () => self.state.phase,
+      practice: () => self.practice,
+      ghostChatEnabled: () => self.state.settings.ghostChat,
+      killRangePx: () => self.state.settings.killRange * 32,
+      selfById: (id) => {
+        const player = self.state.players.get(id);
+        return player ? self.aiSeatView(player) : null;
+      },
+      seats: () => [...self.state.players.values()].map((p) => self.aiSeatView(p)),
+      bodies: () =>
+        [...self.state.bodies.values()]
+          .filter((b) => !b.reported)
+          .map((b) => ({ id: b.id, victimId: b.victimId, victimName: b.victimName, x: b.x, y: b.y })),
+      sabotage: () => {
+        const spec = SABOTAGE_SPECS[self.state.sabotage.kind as SabotageKind];
+        return {
+          kind: self.state.sabotage.kind,
+          label: spec?.label ?? '',
+          endsAt: self.state.sabotage.endsAt,
+          fixSpots: spec?.fixSpots ?? [],
+        };
+      },
+      meeting: () => ({
+        active: self.state.meeting.active,
+        stage: self.state.meeting.stage,
+        endsAt: self.state.meeting.endsAt,
+        votesCast: self.state.meeting.votesCast,
+        votersAlive: [...self.state.players.values()].filter((p) => p.alive).length,
+      }),
+      chat: (limit) =>
+        self.state.chat
+          .filter((c) => !c.system)
+          .slice(-limit)
+          .map((c) => ({ from: c.name, text: c.text })),
+      tasksOf: (id) =>
+        (self.tasks.get(id) ?? []).map((t) => ({
+          id: t.id,
+          spotId: t.spotId,
+          room: t.room,
+          category: t.category,
+          done: t.done,
+          stage: t.stage,
+          stages: t.stages,
+        })),
+      roleOf: (id) => {
+        const team = self.roles.get(id) ?? 'crew';
+        const fellows =
+          team === 'impostor'
+            ? [...self.roles.entries()]
+                .filter(([otherId, otherTeam]) => otherTeam === 'impostor' && otherId !== id)
+                .map(([otherId]) => self.state.players.get(otherId)?.name ?? otherId)
+            : [];
+        return { role: self.roleIds.get(id) ?? 'crewmate', team, fellows };
+      },
+      roomAt: (x, y) => self.roomOf(x, y),
+      spot: (spotId) => {
+        const spot = WORLD.taskSpots.find((s) => s.id === spotId);
+        return spot ? { x: spot.tile.x * 32 + 16, y: spot.tile.y * 32 + 16 } : null;
+      },
+      sees: (id, x, y) => {
+        const player = self.state.players.get(id);
+        if (!player) return false;
+        return canSeeAnywhere(
+          self.gridFor(player),
+          player.x,
+          player.y,
+          x,
+          y,
+          self.state.sabotage.kind === 'lights' ? DARK_VISION_TILES : undefined,
+        );
+      },
+      pathTo: (id, x, y) => {
+        const player = self.state.players.get(id);
+        if (!player) return null;
+        return findPath(self.gridFor(player), player.x, player.y, x, y);
+      },
+      patrolSpots: () =>
+        WORLD.taskSpots.map((s) => ({ id: s.id, x: s.tile.x * 32 + 16, y: s.tile.y * 32 + 16 })),
+      move: (id, x, y) => {
+        const previous = self.moveInputs.get(id);
+        self.moveInputs.set(id, { seq: (previous?.seq ?? 0) + 1, x, y, at: Date.now() });
+      },
+      say: (id, text) => {
+        const player = self.state.players.get(id);
+        if (player && text.trim().length > 0) self.say(player, text.trim().slice(0, MAX_CHAT_LEN));
+      },
+      doTask: (id, taskId) => {
+        const player = self.state.players.get(id);
+        return player ? self.completeTask(player, taskId) : false;
+      },
+      kill: (id, targetId) => {
+        const killer = self.state.players.get(id);
+        if (!killer) return false;
+        const result = self.resolveKill(killer, targetId);
+        return result === 'ok' || result === 'witnessed';
+      },
+      report: (id, bodyId) => {
+        const reporter = self.state.players.get(id);
+        return reporter ? self.tryReport(reporter, bodyId) : false;
+      },
+      vote: (id, target) => {
+        const voter = self.state.players.get(id);
+        if (voter) self.castVote(voter, target);
+      },
+      sabotageAction: (id, kind) => {
+        const player = self.state.players.get(id);
+        return player ? self.startSabotage(player, kind as SabotageKind) : false;
+      },
+      fix: (id, spotId) => {
+        const player = self.state.players.get(id);
+        return player ? self.tryFix(player, spotId) : false;
+      },
+      hasVoted: (id) => self.votes.has(id),
+    };
+  }
+
   private tick(_deltaMs: number): void {
     const started = performance.now();
     const now = Date.now();
+    // Residents decide before movement is integrated, so a decision made this
+    // tick is visible to the players in this tick's patch.
+    if (this.ai) {
+      try {
+        this.ai.tick();
+      } catch (err) {
+        // A resident bug must never take the match down.
+        logger.warn({ err: (err as Error).message }, 'ai driver tick failed');
+      }
+    }
     if (this.state.phase === 'PLAY') {
-      let index = 0;
       this.state.players.forEach((player) => {
-        if (player.isAi) return;
         const input = this.moveInputs.get(player.id);
         const fresh = input && now - input.at <= INPUT_TTL_MS ? input : null;
         const grid = this.gridFor(player);
@@ -745,7 +951,6 @@ export class GameRoom extends Room<{ state: LobbyState }> {
         if (step.dirY !== player.dirY) player.dirY = step.dirY;
         if (fresh && player.seq !== fresh.seq) player.seq = fresh.seq;
       });
-      void index;
     }
     // ---- rules timers (MEETING phases, sabotage expiry) ----
     if (this.state.phase === 'MEETING' && this.state.meeting.active && now > this.meetingStageEndsAt) {

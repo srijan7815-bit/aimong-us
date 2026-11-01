@@ -74,13 +74,35 @@ repo, and paste these values in the dashboard when asked (never in git):
 | Variable | Value |
 |----------|-------|
 | `PUBLIC_URL` | your Render URL, e.g. `https://aimong-us.onrender.com` |
-| `OPENROUTER_API_KEY` | only when the AI brains arrive (M5) |
-| `NVIDIA_API_KEY` | optional, second provider (M6) |
+| `NVIDIA_API_KEY` | **brings the residents online** (NIM, current default provider) |
+| `OPENROUTER_API_KEY` | optional fallback provider |
+| `CONSOLE_KEY` | protects `/console` + `/api/console/*` (owner panel) |
 | `ADMIN_TOKEN` | optional, protects the `/admin` page (M5) |
 
 State lives in memory, so the service **must stay at one instance**
 (`numInstances: 1`). The free plan sleeps after ~15 minutes idle; use Starter for
 game night.
+
+## The residents (AI seats)
+
+Dispatch residents from the console (`/console`, team code + seats) and they join
+as normal players: they walk, do tasks, report bodies, sabotage, argue in
+meetings and vote. They also answer you in the panel.
+
+- **Brain:** one OpenAI-compatible gateway (`apps/server/src/ai/llm.ts`).
+  `NVIDIA_API_KEY` puts NIM first; `OPENROUTER_API_KEY` is the fallback. No key
+  and `LLM_MOCK=0` ⇒ the snapshot reports `offline` and residents stay silent
+  (they still play — the body is deterministic).
+- **Model:** `NIM_PLAY_MODEL` / `NIM_MEETING_MODEL` (default
+  `nvidia/nemotron-3.5-bolt-e4b`). Reasoning-only models answer with empty
+  content on NIM and are treated as failures — see `DECISIONS.md` #27.
+- **Budget:** `NIM_RPM` (default 30 of the ~40 free), `MAX_LLM_CONCURRENCY`,
+  `LLM_TIMEOUT_MS`, `MAX_COST_USD_PER_GAME`.
+- **Status:** `/healthz` shows `brain` + `llmCalls`; the console snapshot shows
+  model, calls, tokens and cost.
+- **Fair play:** residents only know what the fog allows (same `canSeeAnywhere`
+  the clients use) and act through the same rule methods as a human — there is no
+  second code path to cheat with.
 
 ## Tuning without touching code
 

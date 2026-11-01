@@ -20,6 +20,8 @@ import { registry } from './registry.js';
 import { GameRoom } from './rooms/GameRoom.js';
 import { RateLimiter } from './http/ratelimit.js';
 import { CONSOLE_HTML, createConsoleRouter, consoleState } from './http/console.js';
+import { commons } from './cluster/commons.js';
+import { gateway } from './ai/llm.js';
 import { roomByCode } from './rooms/presence.js';
 
 /**
@@ -51,6 +53,12 @@ export async function main(): Promise<void> {
   app.set('trust proxy', true);
   app.use(express.json({ limit: '32kb' }));
 
+  // Bring the residents' voices online once: the gateway owns the keys and the
+  // rate limiters, the Commons only needs to know whether it can speak.
+  const llm = gateway();
+  commons.brainOnline = llm.ready;
+  logger.info({ llm: llm.description, ready: llm.ready }, 'brain wired');
+
   const bootedAt = Date.now();
   const apiLimiter = new RateLimiter({ max: 60, windowMs: 60_000 });
 
@@ -62,6 +70,8 @@ export async function main(): Promise<void> {
       version: SHARED_VERSION,
       rooms: registry.size,
       uptimeSec: Math.round((Date.now() - bootedAt) / 1000),
+      brain: llm.description,
+      llmCalls: llm.stats.calls,
     });
   });
 

@@ -1,6 +1,6 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M3.5 (full role + feature set) COMPLETE, pushed, verified live · next: M4 (scripted bot bodies)**
+Last updated: 2026-11-01 · Milestone: **M4/M5-lite (residents with bodies + NIM brains) COMPLETE · next: M5 proper (meeting orchestration, mood, memory)**
 
 > **Live app: https://aimong-us.onrender.com** (Render free plan, singapore,
 > service `srv-dbjag6oae00c73dlkek0`, repo `github.com/srijan7815-bit/aimong-us`)
@@ -9,6 +9,30 @@ Last updated: 2026-11-01 · Milestone: **M3.5 (full role + feature set) COMPLETE
 > same lobby by code — 12/12 PWA checks passing against production.
 
 ## Done
+
+## M4 / M5-lite — residents with bodies and NIM voices (complete)
+
+- **Bodies (M4):** every AI seat walks with A* + string-pulled steering, works
+  its own tasks (two-stage longs included), fixes sabotages it can reach, reports
+  bodies it can see, and as an impostor hunts, kills in range, sabotages and
+  never touches its own team. Rules moved out of the socket handlers into
+  `resolveKill` / `completeTask` / `tryFix` / `startSabotage` / `tryReport` /
+  `castVote`, so residents and humans take the *same* path.
+- **Brains (M5-lite):** one OpenAI-compatible gateway, NVIDIA NIM first
+  (`nvidia/nemotron-3.5-bolt-e4b`, ~0.4-0.7 s/call), OpenRouter fallback, token
+  bucket + concurrency ceiling + timeout, `offline`/`mock` modes that never fake
+  a reply. Residents answer the owner in the console from real model output.
+- **Fog-legal observation:** only what `canSeeAnywhere` allows, plus the seat's
+  own ledger; strict JSON decisions (`thought`/`say`/`intent`) or the seat does
+  not act; duplicate lines are filtered room-wide.
+- **Measured (local, real NIM key):** `ai-playthrough` **11/11** — 7 residents
+  seated via the console, 7/7 walked out of spawn, tasks credited, a kill, a
+  report, a meeting, votes cast, 8 speakers, **48 LLM calls**. Example chat heard
+  live: `Dima: ro medbay not galley` / `Mira: ro where exactly did you say` /
+  `Tobias (ghost): everyone please state where you were`.
+- **Regression suite unchanged:** M3.5 playthrough **21/21**, smoke **23/23**
+  (now also asserts a resident answers through the gateway), unit tests
+  **101/101**.
 
 ## M3.5 — full role and feature set (complete, live)
 

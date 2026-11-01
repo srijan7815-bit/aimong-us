@@ -142,8 +142,13 @@ async function main(): Promise<void> {
   const snap = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
   if (!Array.isArray(snap.residents) || snap.residents.length < 6)
     throw new Error('commons returned no residents');
-  if (snap.brainOnline !== false) throw new Error('brain should report offline without keys');
-  checks.push(`commons home with ${snap.residents.length} residents (no fake brain)`);
+  // The gateway reports what it really is: a real provider, a mock, or offline.
+  if (typeof snap.brain?.model !== 'string') throw new Error('snapshot is missing the brain report');
+  if (snap.brainOnline !== (snap.brain.model !== 'offline'))
+    throw new Error(`brainOnline disagrees with the model report (${snap.brain.model})`);
+  checks.push(
+    `commons home with ${snap.residents.length} residents (brain: ${snap.brain.model}, honest status)`,
+  );
 
   const said = await fetch(`${BASE}/api/console/say`, {
     method: 'POST',
@@ -155,6 +160,17 @@ async function main(): Promise<void> {
   if (!afterSay.messages.some((m: any) => m.from === 'owner' && m.text.includes('smoke:')))
     throw new Error('owner message missing from the feed');
   checks.push('owner broadcast reaches all residents and lands in the feed');
+  // With a brain online (a key or the mock) the residents must answer in voice.
+  if (snap.brainOnline) {
+    let answered = false;
+    for (let i = 0; i < 40 && !answered; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+      const live = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
+      answered = live.messages.some((m: any) => m.from === 'resident');
+    }
+    if (!answered) throw new Error('brain online but no resident answered the owner');
+    checks.push('a resident answered the owner through the model gateway');
+  }
 
   // Team code: residents walk into a real room and take seats.
   const host3 = new Client(WS);

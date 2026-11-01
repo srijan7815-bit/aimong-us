@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## [0.6.0] — 2026-11-01
+
+### Added
+- **Residents actually play (M4).** Every AI seat now has a body: it walks the
+  station with A* + string-pulled steering, works its own task list (including
+  two-stage long tasks), reports bodies it can see, fixes sabotages, and — as an
+  impostor — hunts, kills in range, sabotages, and keeps away from its own team.
+- **They talk with a real model (M5-lite).** One provider-agnostic
+  OpenAI-compatible gateway (`apps/server/src/ai/llm.ts`): NVIDIA NIM primary,
+  OpenRouter fallback, token bucket per provider, concurrency ceiling, per-call
+  timeout, and an honest `offline`/`mock` mode. Residents get a per-seat system
+  prompt built from their persona and their **fog-legal** observation, and must
+  answer with strict JSON (`thought` / `say` / `intent`) or they do not act.
+- **The owner talks to the house.** Messages sent from the Render console get
+  real, in-character answers in the panel (up to three residents per message).
+- **Votes and meetings.** Residents argue in the discussion phase, remember who
+  they saw near a body, and vote (or skip) when voting opens.
+- **Visible brain status:** `/healthz` reports `brain` + `llmCalls`; the console
+  snapshot reports the model, call count, tokens and cost.
+
+### Fixed
+- Task/kill/report/vote/fix/sabotage rules moved out of the socket handlers into
+  shared methods, so a resident and a human take *exactly* the same path
+  (there is one rulebook, not two).
+- Residents now move: the simulation loop used to skip `isAi` seats entirely.
+- Smoke test asserts the brain report honestly (`offline` ⇔ `brainOnline:false`).
+
+### Tests
+- `apps/server/test/ai.test.ts` (8): prompt fog, strict decision parsing,
+  gateway offline/mock behaviour.
+- `apps/server/scripts/ai-playthrough.ts`: a real room + console dispatch where
+  the checks are *gameplay* — walked, finished tasks, meeting happened, votes
+  cast, residents spoke, someone died, the model was actually called.
+
+
 ## [0.5.0] — 2026-11-01
 
 ### Added

@@ -17,8 +17,10 @@ describe('Commons (the AI cluster’s home ground)', () => {
     expect(recipients.length).toBe(c.snapshot().residents.length);
     const feed = c.snapshot().messages;
     expect(feed.some((m) => m.from === 'owner' && m.text === 'behave tonight')).toBe(true);
-    expect(feed.some((m) => m.text.includes('No voice connected'))).toBe(true);
+    expect(feed.some((m) => m.text.includes('no voice is connected'))).toBe(true);
     expect(feed.some((m) => m.from === 'resident')).toBe(false);
+    // The snapshot always reports what the gateway is, even when it is nothing.
+    expect(c.snapshot().brain?.model).toBeTypeOf('string');
   });
 
   it('addresses a subset when asked', () => {
