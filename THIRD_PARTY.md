@@ -77,3 +77,14 @@ observations of AI seats.
 Icons, splash screens and the launcher mark are generated from the repo's own
 pod-bot vector by `scripts/gen-android-assets.py` — no third-party art. The APK
 contains only our code, our assets and the above MIT libraries.
+
+## M2 additions
+
+| Component | Licence | Use |
+|---|---|---|
+| Phaser 3.90 | MIT | Game rendering (already in the ledger) |
+| Pillow (build-time only) | HPND | `scripts/gen-atlas.py` draws the placeholder atlas; not shipped as code, the PNG is ours |
+
+No third-party art, audio, fonts or map data were added in M2. The station layout
+(`scripts/gen-map.mjs`) and the placeholder atlas (`scripts/gen-atlas.py`) are
+original to this project, generated from code in this repository.

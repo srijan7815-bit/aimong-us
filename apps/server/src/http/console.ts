@@ -32,10 +32,32 @@ export function consoleAuthConfigured(): boolean {
   return Boolean(process.env.CONSOLE_KEY);
 }
 
+function isProduction(): boolean {
+  return (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+}
+
+/**
+ * Fail closed. In production the console is *unreachable* unless CONSOLE_KEY is
+ * set — a missing key is a misconfiguration, and a misconfigured console is a
+ * public back door into the AI cluster. In development an unset key keeps the
+ * console usable (no red warning needed) so `pnpm dev` stays frictionless.
+ */
+export function consoleState(): 'locked' | 'open-dev' | 'keyed' {
+  if (process.env.CONSOLE_KEY) return 'keyed';
+  return isProduction() ? 'locked' : 'open-dev';
+}
+
 function guard(req: Request, res: Response): boolean {
-  const expected = process.env.CONSOLE_KEY;
-  if (!expected) return true; // open console: documented in DECISIONS.md
-  if (!sameSecret(keyOf(req), expected)) {
+  const state = consoleState();
+  if (state === 'locked') {
+    res.status(403).json({
+      error: 'The console is locked: CONSOLE_KEY is not configured on this server.',
+      hint: 'Render → aimong-us → Environment → add CONSOLE_KEY, then redeploy.',
+    });
+    return false;
+  }
+  if (state === 'open-dev') return true;
+  if (!sameSecret(keyOf(req), process.env.CONSOLE_KEY ?? '')) {
     res.status(401).json({ error: 'console key required' });
     return false;
   }
@@ -44,24 +66,34 @@ function guard(req: Request, res: Response): boolean {
 
 export function createConsoleRouter(): Router {
   const router = Router();
-  const limiter = new RateLimiter({ max: 40, windowMs: 60_000 });
+  // Reads are polled by the console every 2.5 s; writes are typed by one human.
+  // Both are capped per IP so the endpoints cannot be used to hammer the house.
+  const readLimiter = new RateLimiter({ max: 120, windowMs: 60_000 });
+  const writeLimiter = new RateLimiter({ max: 20, windowMs: 60_000 });
+
+  const throttle = (limiter: RateLimiter) => (req: Request, res: Response): boolean => {
+    if (limiter.take(req.ip ?? 'unknown')) return true;
+    res.status(429).json({ error: 'slow down' });
+    return false;
+  };
+  const readGate = throttle(readLimiter);
+  const writeGate = throttle(writeLimiter);
 
   router.get('/snapshot', (req, res) => {
     if (!guard(req, res)) return;
+    if (!readGate(req, res)) return;
     const snapshot = commons.snapshot();
     res.json({
       ...snapshot,
       authRequired: consoleAuthConfigured(),
+      consoleState: consoleState(),
       shareBase: getAppConfig().env.PUBLIC_URL,
     });
   });
 
   router.post('/say', (req, res) => {
     if (!guard(req, res)) return;
-    if (!limiter.take(req.ip ?? 'unknown')) {
-      res.status(429).json({ error: 'slow down' });
-      return;
-    }
+    if (!writeGate(req, res)) return;
     const parsed = OwnerMessage.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Message must be 1–400 characters.' });
@@ -75,10 +107,7 @@ export function createConsoleRouter(): Router {
   // Team code: send residents into a live room.
   router.post('/dispatch', (req, res) => {
     if (!guard(req, res)) return;
-    if (!limiter.take(req.ip ?? 'unknown')) {
-      res.status(429).json({ error: 'slow down' });
-      return;
-    }
+    if (!writeGate(req, res)) return;
     const parsed = DispatchRequest.safeParse({ ...req.body, code: normalizeCode(req.body?.code ?? '') });
     if (!parsed.success || !isValidCode(parsed.data.code)) {
       res.status(400).json({ error: 'That room code does not look right (5 characters).' });
@@ -101,6 +130,7 @@ export function createConsoleRouter(): Router {
 
   router.get('/residents', (req, res) => {
     if (!guard(req, res)) return;
+    if (!readGate(req, res)) return;
     res.json({ residents: commons.snapshot().residents });
   });
 
@@ -257,8 +287,8 @@ function render(snap){
     banner.innerHTML = '<div class="warn">This console is locked. Paste the console key from your Render env (<code>CONSOLE_KEY</code>) — it stays in this browser.</div>' +
       '<div class="row" style="margin-bottom:12px"><input id="keyInput" placeholder="console key" /><button id="saveKey">Unlock</button></div>';
     $('saveKey').onclick = () => { localStorage.setItem('consoleKey', $('keyInput').value.trim()); refresh(); };
-  } else if (!authRequired){
-    banner.innerHTML = '<div class="warn">No <code>CONSOLE_KEY</code> set on the server, so this page is open to anyone with the URL. Set one in Render → Environment when you want it locked.</div>';
+  } else if (snap.consoleState === 'open-dev'){
+    banner.innerHTML = '<div class="warn">Development server with no <code>CONSOLE_KEY</code> — open on purpose so <code>pnpm dev</code> stays frictionless. Production refuses to serve this page without a key.</div>';
   } else banner.innerHTML = '';
   if (snap.lastDispatch) $('code').placeholder = 'last: ' + snap.lastDispatch.code;
 }

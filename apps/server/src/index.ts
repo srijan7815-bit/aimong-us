@@ -19,7 +19,8 @@ import { setLogger, logger } from './logger-instance.js';
 import { registry } from './registry.js';
 import { GameRoom } from './rooms/GameRoom.js';
 import { RateLimiter } from './http/ratelimit.js';
-import { CONSOLE_HTML, createConsoleRouter } from './http/console.js';
+import { CONSOLE_HTML, createConsoleRouter, consoleState } from './http/console.js';
+import { roomByCode } from './rooms/presence.js';
 
 /**
  * Colyseus 0.18 checks `client.readyState !== WebSocket.OPEN` inside its
@@ -79,9 +80,45 @@ export async function main(): Promise<void> {
     res.json(room);
   });
 
+  // Tick timing, for the M2 performance budget. Deliberately not exposed in
+  // production: it is a build-time measurement, not part of the product surface.
+  if (config.env.NODE_ENV !== 'production') {
+    app.get('/api/metrics', (_req, res) => {
+      const rooms = registry.list();
+      res.json({
+        rooms: rooms.length,
+        ticks: rooms.map((r) => {
+          const room = roomByCode(r.code);
+          return room ? { code: r.code, ...room.ticks.snapshot() } : { code: r.code };
+        }),
+      });
+    });
+  }
+
   // Owner console: the doorway to the AI cluster's home ground.
   app.use('/api/console', createConsoleRouter());
   app.get('/console', (_req, res) => {
+    // Fail closed: a production server with no CONSOLE_KEY must not expose the
+    // cluster's home ground at all (the API refuses too — see http/console.ts).
+    if (consoleState() === 'locked') {
+      res
+        .status(403)
+        .type('html')
+        .setHeader('cache-control', 'no-store')
+        .send(
+          `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+           <body style="font-family:system-ui;background:#070b14;color:#e8f0fb;padding:2rem;line-height:1.5">
+             <h1 style="font-size:1.2rem">The Commons is locked</h1>
+             <p style="color:#8fa3bf">This server has no <code>CONSOLE_KEY</code> set, so the owner
+             console is refusing every request. That is deliberate: an unlocked console would let
+             anyone message or move the AI cluster.</p>
+             <p style="color:#8fa3bf">Fix it in the dashboard — Render → <b>aimong-us</b> →
+             Environment → add <code>CONSOLE_KEY</code> (any long random string) → save.
+             The service redeploys and this page will ask for that key.</p>
+           </body>`,
+        );
+      return;
+    }
     res.type('html').setHeader('cache-control', 'no-cache').send(CONSOLE_HTML);
   });
 

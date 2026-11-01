@@ -31,6 +31,14 @@ export const PlayerState = schema({
   ready: t.boolean().default(false),
   connected: t.boolean().default(true),
   joinedAt: t.number().default(0),
+  // --- M2: world position, authoritative on the server ---
+  x: t.number().default(0),
+  y: t.number().default(0),
+  dirX: t.number().default(0),
+  dirY: t.number().default(0),
+  moving: t.boolean().default(false),
+  /** Last movement input sequence applied — clients use it to reconcile. */
+  seq: t.number().default(0),
 });
 
 export const ChatEntryState = schema({

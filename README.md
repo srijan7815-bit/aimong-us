@@ -114,3 +114,40 @@ Nothing from the commercial game is used, extracted or imitated. Full ledger in
 
 Rebuild the APK: `bash scripts/build-apk.sh` (needs JDK 21 + Android SDK; CI does it
 for you on every push that touches the client).
+
+## Keeping the free server awake (optional)
+
+The free Render plan sleeps after ~15 minutes with no traffic; the first open then
+takes 30–60 s while it boots. The app already shows "Waking up the station…" and
+retries, so nothing breaks — it is just slow.
+
+There is deliberately **no ping code in this repo**. If you want the instance warm
+on a game night, point an external uptime pinger at the health endpoint:
+
+| Setting | Value |
+|---|---|
+| URL to monitor | `https://aimong-us.onrender.com/healthz` |
+| Method | `GET` |
+| Expected | HTTP `200` and body containing `"ok":true` |
+| Interval | every 10 minutes (Render sleeps at 15) |
+
+Any of these work on their free tier — UptimeRobot, Better Stack, cron-job.org,
+Freshping. Two caveats worth knowing:
+
+- A 10-minute pinger keeps the web service warm but **does not** cover Render's
+  monthly free instance hours. For a real game night, switch the service to the
+  **Starter** plan for a day and back to free afterwards; that removes the sleep
+  entirely.
+- Don't point the pinger at `/console` or `/api/console/*` — those are
+  rate-limited and, in production, refuse traffic without `CONSOLE_KEY`.
+
+## Controls
+
+| | |
+|---|---|
+| Phone | Drag anywhere on the left half of the screen — the stick appears under your thumb. Landscape is the intended orientation; portrait shows a hint card. |
+| Desktop | `WASD` or arrow keys. |
+| Any | Leave button (top right) returns to the lobby. |
+
+The station is walked in **free roam** for now: movement and fog are real, roles,
+tasks and kills arrive in M3.

@@ -1,0 +1,67 @@
+{
+  "name": "placeholder",
+  "version": 1,
+  "author": "AImong Us (original, drawn by scripts/gen-atlas.py)",
+  "licence": "project",
+  "tileSize": 32,
+  "image": "atlas.png",
+  "imageWidth": 256,
+  "imageHeight": 64,
+  "frames": {
+    "floor": {
+      "x": 0,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "floorAlt": {
+      "x": 32,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "wall": {
+      "x": 64,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "vent": {
+      "x": 96,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "task": {
+      "x": 128,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "pod": {
+      "x": 160,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "podVisor": {
+      "x": 192,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "body": {
+      "x": 224,
+      "y": 0,
+      "w": 32,
+      "h": 32
+    },
+    "shadow": {
+      "x": 0,
+      "y": 32,
+      "w": 32,
+      "h": 32
+    }
+  },
+  "notes": "Swap art by pointing VITE_ATLAS at another folder with the same manifest shape."
+}

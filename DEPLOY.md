@@ -136,3 +136,14 @@ To lock the console against strangers: Render → **aimong-us** → Environment 
 add `CONSOLE_KEY` = a long random string → save (the service redeploys). The page
 then asks for that key once and keeps it in your browser only. Without it the
 console works but shows a red "this page is open to anyone" banner.
+
+## Milestone updates and the installed app
+
+The APK bundles the client, so it is a snapshot of the build it was made from
+(that is what makes it open instantly and work on a bad connection). After a
+deploy, an already-installed app keeps showing its bundled version until you
+install a newer APK — CI builds one on every push that touches the client, and the
+Releases page carries the latest.
+
+The browser build at https://aimong-us.onrender.com always reflects `main`
+immediately; use it to check a fresh deploy without reinstalling anything.

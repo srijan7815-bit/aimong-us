@@ -8,6 +8,9 @@
  * client joins by roomId -> state converges, chat + settings + start notice.
  */
 import { Client } from '@colyseus/sdk';
+import { WORLD, buildGrid, circleHitsWall, computeVisionMask } from '@aimong/shared';
+
+const grid = buildGrid(WORLD);
 
 const BASE = process.env.SMOKE_URL ?? 'http://localhost:2567';
 const WS = BASE.replace(/^http/, 'ws');
@@ -83,9 +86,45 @@ async function main(): Promise<void> {
   if (room1.state.settings.discussionSec !== 45) throw new Error('non-host changed settings');
   checks.push('non-host settings change rejected');
 
+  // M2: start opens the station (movement only — roles arrive in M3).
   room1.send('start', {});
-  await waitFor(() => notices1.some((t) => t.includes('M2')), 'start notice');
-  checks.push('start explains M1 has no simulation yet (no fake start)');
+  await waitFor(() => room1.state.phase === 'PLAY', 'station opens');
+  if (!notices1.some((t) => t.includes('Roles, tasks and kills arrive in M3')))
+    throw new Error('start did not explain what is missing yet');
+  checks.push('start opens the station and says roles/tasks arrive in M3');
+
+  // Every seat is on the map, standing on floor.
+  const seated = players(room1);
+  for (const key of Object.keys(room1.state.players)) void key;
+  room1.state.players.forEach((p: any) => {
+    if (circleHitsWall(grid, p.x, p.y)) throw new Error(`${p.name} spawned inside a wall`);
+  });
+  checks.push(`${seated.length} players placed on the map (none inside a wall)`);
+
+  // Movement: hold "east" for a second and watch the authoritative position move.
+  const before = { x: room1.state.players.get(room1.sessionId).x };
+  for (let seq = 1; seq <= 20; seq++) {
+    room1.send('input', { seq, x: 1, y: 0 });
+    await wait(50);
+  }
+  const after = room1.state.players.get(room1.sessionId);
+  if (after.x - before.x < 60) throw new Error(`server moved the player only ${after.x - before.x}px`);
+  if (circleHitsWall(grid, after.x, after.y)) throw new Error('server moved the player into a wall');
+  checks.push(`server-authoritative movement: +${(after.x - before.x).toFixed(0)} px in 1 s, still on floor`);
+
+  // Walls: keep pushing east into the station edge for a second.
+  for (let seq = 21; seq <= 60; seq++) {
+    room1.send('input', { seq, x: 1, y: 0 });
+    await wait(50);
+  }
+  const walled = room1.state.players.get(room1.sessionId);
+  if (circleHitsWall(grid, walled.x, walled.y)) throw new Error('player pushed through a wall');
+  checks.push('walls hold: pushing into a wall for 2 s leaves the player on floor');
+
+  // Vision: the server answers with the same mask the client draws.
+  const mask = computeVisionMask(grid, walled.x, walled.y);
+  if (mask.visibleCount < 10) throw new Error('vision mask is suspiciously empty');
+  checks.push(`vision mask at the player's position: ${mask.visibleCount} tiles visible`);
 
   const finalLookup = await fetch(`${BASE}/api/rooms/${code}`).then((r) => r.json());
   if (finalLookup.players !== 2) throw new Error('registry player count stale');
@@ -132,13 +171,27 @@ async function main(): Promise<void> {
   const dispatch = await fetch(`${BASE}/api/console/dispatch`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code: teamCode.toLowerCase(), seats: 3, note: 'be nice to the humans' }),
+    body: JSON.stringify({ code: teamCode.toLowerCase(), seats: 4, note: 'be nice to the humans' }),
   }).then((r) => r.json());
-  if (dispatch.seated.length !== 3) throw new Error(`expected 3 ai seats, got ${dispatch.seated?.length}`);
-  await waitFor(() => room3.state.players.size === 4, 'residents seated');
+  if (dispatch.seated.length !== 4) throw new Error(`expected 4 ai seats, got ${dispatch.seated?.length}`);
+  await waitFor(() => room3.state.players.size === 5, 'residents seated');
   const aiSeated = players(room3).filter((p) => p.isAi).length;
-  if (aiSeated !== 3) throw new Error(`lobby shows ${aiSeated} AI seats`);
-  checks.push(`team code ${teamCode}: 3 residents seated as AI players in the lobby`);
+  if (aiSeated !== 4) throw new Error(`lobby shows ${aiSeated} AI seats`);
+  checks.push(`team code ${teamCode}: 4 residents seated as AI players in the lobby`);
+
+  // M2: the residents who took seats are standing on the map too (still for now).
+  room3.send('start', {});
+  await waitFor(() => (room3 as any).state.phase === 'PLAY', 'cluster room opens');
+  const aiPositions: Array<{ name: string; x: number; y: number }> = [];
+  room3.state.players.forEach((p: any) => {
+    if (p.isAi) aiPositions.push({ name: p.name, x: p.x, y: p.y });
+  });
+  if (aiPositions.length !== 4) throw new Error(`expected 4 resident pods, got ${aiPositions.length}`);
+  for (const ai of aiPositions) {
+    if (ai.x <= 0 || ai.y <= 0) throw new Error(`${ai.name} has no map position`);
+    if (circleHitsWall(grid, ai.x, ai.y)) throw new Error(`${ai.name} is inside a wall`);
+  }
+  checks.push(`4 residents spawn on the map (e.g. ${aiPositions[0].name} at ${Math.round(aiPositions[0].x)},${Math.round(aiPositions[0].y)})`);
 
   const roomsSnap = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
   if (!roomsSnap.residents.some((r: any) => r.status === 'in-game'))
@@ -147,10 +200,18 @@ async function main(): Promise<void> {
 
   await room3.leave();
   await host3.close?.();
-  await wait(500);
+  // Give Colyseus a moment to dispose the room (it calls releaseRoom on dispose).
+  const dispatched = new Set(dispatch.seated.map((id: string) => id.replace(/^ai:/, '')));
+  for (let i = 0; i < 40; i++) {
+    const snapNow = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
+    const stillOut = snapNow.residents.filter((r: any) => dispatched.has(r.id) && r.status === 'in-game');
+    if (stillOut.length === 0) break;
+    await wait(100);
+  }
   const home = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
-  if (home.residents.some((r: any) => r.status === 'in-game'))
-    throw new Error('residents did not come home after the room closed');
+  const stillInGame = home.residents.filter((r: any) => dispatched.has(r.id) && r.status === 'in-game');
+  if (stillInGame.length > 0)
+    throw new Error(`${stillInGame.length} dispatched resident(s) did not come home after the room closed`);
   checks.push('residents return home when the room closes');
 
   for (const c of checks) console.log(`  ✓ ${c}`);

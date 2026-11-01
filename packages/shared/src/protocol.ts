@@ -38,8 +38,17 @@ export const JoinOptions = z.object({
 });
 export type JoinOptions = z.infer<typeof JoinOptions>;
 
+/** Movement input: a direction vector (analog magnitude allowed) + sequence. */
+export const MoveInput = z.object({
+  seq: z.number().int().min(0).max(1e9),
+  x: z.number().min(-1).max(1),
+  y: z.number().min(-1).max(1),
+});
+export type MoveInput = z.infer<typeof MoveInput>;
+
 export const ClientMessages = {
   ready: z.object({ ready: z.boolean() }),
+  input: MoveInput,
   setName: z.object({ name: PlayerName }),
   chat: z.object({ text: ChatText }),
   settings: z.object({ patch: LobbySettingsPatch }),
@@ -74,6 +83,15 @@ export interface PlayerView {
   ready: boolean;
   connected: boolean;
   joinedAt: number;
+  /** World position in pixels (server-authoritative). */
+  x: number;
+  y: number;
+  /** Facing/intent direction, -1..1. */
+  dirX: number;
+  dirY: number;
+  moving: boolean;
+  /** Last input sequence the server has applied for this player. */
+  seq: number;
 }
 
 export const Phase = z.enum(['LOBBY', 'STARTING', 'PLAY', 'MEETING', 'END']);

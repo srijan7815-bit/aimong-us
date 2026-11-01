@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## [0.3.0] — 2026-11-01
+
+### Added
+- **Station Halcyon-9**: original 64×44 tile map — 10 named rooms, 13 corridors,
+  4 loops, 8 vent pairs, 12 task spots, 10 spawns — generated as Tiled JSON and as
+  a shared walkability grid + room graph (`scripts/gen-map.mjs`).
+- **Server-authoritative movement** at 20 Hz with circle-vs-tile collision and wall
+  sliding (`stepPlayer` in `@aimong/shared`).
+- **Client prediction + remote interpolation** (`apps/client/src/game/scene.ts`),
+  camera follow, per-player pods with name labels.
+- **Fog of war** from one shared visibility function (exact DDA line of sight,
+  walls and corners block), drawn by the client and answered by the server.
+- **Touch controls**: floating virtual joystick, 48 px+ targets, landscape layout,
+  portrait rotate hint, zoom/scroll/pull-to-refresh suppressed on the play surface;
+  WASD/arrows on desktop.
+- **Play screen** (`screens/play.ts`) as a fourth screen: station canvas, HUD with
+  room name, crew count, fps; host "start" now opens the station.
+- **Swappable atlas** placeholder art (`scripts/gen-atlas.py`, `VITE_ATLAS`,
+  `manifest.json`) — no third-party assets.
+- Residents seated from the Commons spawn on the map.
+- `apps/server/scripts/perf-m2.ts` (tick benchmark), `scripts/m2-client-test.mjs`
+  (3-client acceptance test), `apps/server/test/vision-parity.test.ts`,
+  `packages/shared/test/world.test.ts`.
+
+### Changed
+- `GameRoom`: 20 Hz simulation interval, `input`/`resetPositions` messages,
+  `patchRate` matched to the simulation, per-player `seq` reconciliation fields.
+- `start` now launches a free-roam station instead of refusing; seat counting uses
+  residents actually seated, falling back to the host's AI-seat setting.
+- Console: fails closed in production without `CONSOLE_KEY`; rate limited.
+
+### Fixed
+- Pod sprites drew at atlas coordinates (frames are now registered per manifest).
+- Pods dragged an opaque atlas background box (placeholder sheet is transparent).
+- Smooth-follow camera-lag made the local pod lag forever at low frame rates.
+
 ## [0.2.0] — 2026-11-01
 
 ### Added

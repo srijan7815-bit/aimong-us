@@ -24,6 +24,15 @@ import { commons } from '../cluster/commons.js';
 import { registerRoom, unregisterRoom } from './presence.js';
 import { ChatEntryState, LobbyState, MAX_CHAT_HISTORY, PlayerState } from './state.js';
 import { RateLimiter } from '../http/ratelimit.js';
+import {
+  SIM_STEP_MS,
+  WORLD,
+  spawnPosition,
+  stepPlayer,
+  type MoveInput,
+} from '@aimong/shared';
+import { GRID } from '../world/station.js';
+import { TickStats } from '../perf/tick-stats.js';
 import { getAppConfig } from '../app-config.js';
 import { logger } from '../logger-instance.js';
 
@@ -38,9 +47,20 @@ interface JoinAuth {
   ip: string;
 }
 
+/** How long an input stays "live" before the server treats the player as idle. */
+const INPUT_TTL_MS = 500;
+
+interface InputState extends MoveInput {
+  at: number;
+}
+
 export class GameRoom extends Room<{ state: LobbyState }> {
   /** Public so the Commons and the console can address this room by its code. */
   code = '';
+  /** Latest movement intent per session (server-side only). */
+  private moveInputs = new Map<string, InputState>();
+  /** Tick timings, exposed through /api/metrics in non-production. */
+  readonly ticks = new TickStats();
 
   override onCreate(): void {
     const cfg = getAppConfig();
@@ -52,7 +72,12 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     this.code = registry.allocateCode();
     this.maxClients = MAX_PLAYERS;
     this.autoDispose = true;
-    this.maxMessagesPerSecond = 20;
+    // Movement input arrives at ~20 Hz per player; leave headroom for chat and
+    // settings on top of it. Our own per-player limiter guards flooding.
+    this.maxMessagesPerSecond = 60;
+    // 20 Hz state patches, matching the simulation rate (no interpolation gaps
+    // for the client, and no point sending faster than we simulate).
+    this.patchRate = SIM_STEP_MS;
 
     const state = new LobbyState();
     state.code = this.code;
@@ -81,6 +106,7 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     });
 
     this.registerHandlers();
+    this.setSimulationInterval((deltaMs) => this.tick(deltaMs), SIM_STEP_MS);
     registerRoom(this);
     logger.info({ roomId: this.roomId, code: this.code }, 'room created');
   }
@@ -118,6 +144,10 @@ export class GameRoom extends Room<{ state: LobbyState }> {
     player.joinedAt = Date.now();
     player.isAi = false;
     player.isHost = this.state.players.size === 0;
+    // Seat index = join order, so the pod appears somewhere sensible on the map.
+    const spawn = spawnPosition(WORLD, this.state.players.size);
+    player.x = spawn.x;
+    player.y = spawn.y;
     this.state.players.set(client.sessionId, player);
 
     if (player.isHost) this.state.hostId = client.sessionId;
@@ -197,6 +227,10 @@ export class GameRoom extends Room<{ state: LobbyState }> {
       player.ready = true;
       player.connected = true;
       player.joinedAt = Date.now();
+      // Residents stand on the map too — they just do not move yet (M4 drives them).
+      const spawn = spawnPosition(WORLD, this.state.players.size);
+      player.x = spawn.x;
+      player.y = spawn.y;
       this.state.players.set(id, player);
       seated.push(id);
       this.systemMessage(`${player.name} (AI) took a seat`);
@@ -305,32 +339,109 @@ export class GameRoom extends Room<{ state: LobbyState }> {
         normalized === this.code ? `You are in ${this.code}` : `This room is ${this.code}, not ${normalized}`,
       );
     });
+
+
+    this.onMessage('input', (client, raw) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isAi) return;
+      if (this.state.phase !== 'PLAY') return;
+      const msg = ClientMessages.input.safeParse(raw);
+      if (!msg.success) return;
+      const previous = this.moveInputs.get(client.sessionId);
+      // Ignore out-of-order packets (UDP-ish reordering over WebSocket is rare but
+      // possible when a phone switches networks mid-game).
+      if (previous && msg.data.seq < previous.seq) return;
+      this.moveInputs.set(client.sessionId, { ...msg.data, at: Date.now() });
+    });
+
+    this.onMessage('resetPositions', (client) => {
+      // Dev aid used by the smoke/perf harness to put everyone back on spawn.
+      if (this.isHost(client)) this.placeAtSpawns();
+    });
+  }
+
+  /** One authoritative simulation step. Called 20 times a second. */
+  private tick(_deltaMs: number): void {
+    const started = performance.now();
+    const now = Date.now();
+    if (this.state.phase === 'PLAY') {
+      let index = 0;
+      this.state.players.forEach((player) => {
+        if (player.isAi) return;
+        const input = this.moveInputs.get(player.id);
+        const fresh = input && now - input.at <= INPUT_TTL_MS ? input : null;
+        const step = fresh
+          ? stepPlayer(GRID, player.x, player.y, fresh.x, fresh.y, SIM_STEP_MS)
+          : { x: player.x, y: player.y, moving: false, dirX: player.dirX, dirY: player.dirY };
+        if (step.x !== player.x) player.x = step.x;
+        if (step.y !== player.y) player.y = step.y;
+        if (player.moving !== step.moving) player.moving = step.moving;
+        if (step.dirX !== player.dirX) player.dirX = step.dirX;
+        if (step.dirY !== player.dirY) player.dirY = step.dirY;
+        if (fresh && player.seq !== fresh.seq) player.seq = fresh.seq;
+      });
+      void index;
+    }
+    this.ticks.record(performance.now() - started, this.state.players.size);
+  }
+
+  /** Teleport everyone (humans and residents) back to their spawn points. */
+  private placeAtSpawns(): void {
+    let index = 0;
+    this.state.players.forEach((player) => {
+      const spawn = spawnPosition(WORLD, index++);
+      player.x = spawn.x;
+      player.y = spawn.y;
+      player.dirX = 0;
+      player.dirY = 0;
+      player.moving = false;
+    });
+    this.moveInputs.clear();
   }
 
   // ----------------------------------------------------------------- helpers
 
   private tryStart(client: Client): void {
     if (this.state.phase !== 'LOBBY') {
-      this.notice(client, 'warn', 'The game already started.');
+      this.notice(client, 'warn', 'The station is already open.');
       return;
     }
     const humans = [...this.state.players.values()].filter((p) => p.connected && !p.isAi);
-    const total = humans.length + this.state.settings.aiSeats;
+    // Residents that actually took seats count; otherwise the host's AI-seat
+    // setting stands in for seats nobody is sitting in yet.
+    const residentSeats = [...this.state.players.values()].filter((p) => p.isAi).length;
+    const aiSeats = residentSeats > 0 ? residentSeats : this.state.settings.aiSeats;
+    const total = humans.length + aiSeats;
     const minPlayers = getAppConfig().gameDefaults.players.min;
     if (total < minPlayers) {
       this.notice(
         client,
         'warn',
-        `Need ${minPlayers} seats to launch — you have ${total} (${humans.length} human + ${this.state.settings.aiSeats} AI).`,
+        `Need ${minPlayers} seats to launch — you have ${total} (${humans.length} human + ${aiSeats} AI).`,
       );
       return;
     }
-    // M1 stops here on purpose: launching needs the map + rules from M2/M3.
-    this.notice(
-      client,
-      'info',
-      'Lobby works. The station opens in M2 (movement) then M3 (rules) — no fake start.',
-    );
+    // M2 launches a movement preview: everyone walks the station with no roles,
+    // no tasks and no kills yet. M3 turns this into a real match. The notice says
+    // exactly that rather than pretending the game has started.
+    this.placeAtSpawns();
+    this.state.phase = 'PLAY';
+    this.touchRegistry();
+    this.broadcast('notice', {
+      level: 'info',
+      text: 'Station open — walk around. Roles, tasks and kills arrive in M3.',
+    });
+    this.systemMessage(`${total} crew on the station. Free roam (no roles yet).`);
+    logger.info({ code: this.code, players: this.state.players.size }, 'movement preview started');
+  }
+
+  /** Back to the lobby (host action, used between games and by the harness). */
+  private returnToLobby(): void {
+    if (this.state.phase === 'LOBBY') return;
+    this.state.phase = 'LOBBY';
+    this.moveInputs.clear();
+    this.touchRegistry();
+    this.broadcast('notice', { level: 'info', text: 'Back in the lobby.' });
   }
 
   private applySettings(patch: LobbySettingsPatch): void {

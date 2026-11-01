@@ -6,3 +6,4 @@ export * from './schemas.js';
 export * from './version.js';
 
 export * from './cluster.js';
+export * from './world/index.js';

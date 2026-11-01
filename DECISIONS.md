@@ -137,3 +137,60 @@ residents `in-game` somewhere that does not exist.
 **APK is debug-signed and published as a GitHub Release / CI artifact.** No Play
 Store account, no signing keys to lose. Android requires the "install unknown apps"
 toggle; `DEPLOY.md` walks through it.
+
+## 2026-11-01 — M2: map, movement, fog
+
+**The map is generated, not hand-drawn in Tiled.** `scripts/gen-map.mjs` holds a
+hand-authored blueprint (room rectangles, corridors, pillars, vents, tasks, spawns)
+and emits two artefacts: the Tiled JSON for artists, and a TypeScript data module
+for the game. The generator validates reachability, room count, reciprocal vents
+and *at least two graph loops* and refuses to write an invalid station. Reason: a
+walkability grid copied by hand into two places is exactly the kind of thing that
+silently desynchronises between client and server.
+
+**One vision function, not two.** `computeVisionMask` (exact DDA, corner touches
+block) is imported by the client for the fog and by the server for visibility
+answers; `apps/server/test/vision-parity.test.ts` pins both to the same result and
+also pins the map's hash. The alternative — the client drawing its own approximation —
+would give away information the server does not think you have, and would make
+M5's "AIs only know what they could perceive" impossible to guarantee.
+
+**`start` opens a free-roam station instead of refusing.** Through M1 the button
+claimed movement was "coming in M2". Now that movement exists, refusing would be
+the dishonest option; the room enters `PLAY` with an explicit notice that roles,
+tasks and kills arrive in M3. No win conditions, no kills, nothing that pretends
+to be a round.
+
+**Prediction + decaying display offset, not smooth-follow.** The pod's position is
+always the prediction; server corrections are applied to prediction *and* history
+instantly (they are the truth we act on) and mirrored into a display offset that
+decays over ~45 ms. A smooth-follow lerp was tried first and abandoned: below
+~10 fps it never catches up, so the pod walks visibly behind reality forever.
+
+**Corrections are clamped to 48 px.** A correction larger than that is a
+teleport in the same request (respawn, reconnect), so we snap rather than glide
+across the station.
+
+**Input is authoritative from the server only.** The client never writes positions
+to the network; it sends `{seq,x,y}` vectors, the server samples the *latest*
+one at 20 Hz with a 500 ms TTL (so a dead phone's pod stops instead of gliding).
+Out-of-order sequences are dropped.
+
+**Placeholder art ships behind a manifest now.** `VITE_ATLAS` chooses the folder;
+the manifest names frames. Swapping art later is a folder + a build flag, no code
+change, and the licence of the placeholder set is ours (drawn by
+`scripts/gen-atlas.py`). A future artist gets the exact frame list from the
+manifest.
+
+**The APK bundles the client, so it must be rebuilt per milestone.** The native
+shell keeps its offline-first bundled assets; CI builds an APK on every push that
+touches the client, and `docs/app/` + the Releases page carry the current build.
+Owner-facing consequence: after a deploy, the *installed app* still shows the old
+client until a new APK is installed. Documented in DEPLOY.md rather than silently
+switching the app to load remote assets.
+
+**Console auth fails closed in production.** Owner instruction. Missing
+`CONSOLE_KEY` on a production server now returns 403 from `/console` and from
+`/api/console/*` — an unlocked console is a public door into the AI cluster. In
+development the same state stays open so `pnpm dev` has no setup step. Reads are
+limited to 120/min and writes to 20/min per IP.

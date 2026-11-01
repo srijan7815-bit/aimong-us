@@ -11,6 +11,8 @@ import { loadPrefs, savePrefs, loadReconnect, type Prefs } from './lib/prefs.js'
 import { Session, type LobbyView, type PlayerRow } from './net/session.js';
 import { renderHome, type HomeScreen } from './screens/home.js';
 import { renderLobby, type LobbyScreen } from './screens/lobby.js';
+import { renderPlay, type PlayScreen } from './screens/play.js';
+import type { PlayerView } from '@aimong/shared';
 import {
   applyServiceWorkerUpdate,
   ensureServerAwake,
@@ -31,6 +33,7 @@ let prefs: Prefs = loadPrefs();
 const session = new Session();
 let home: HomeScreen | null = null;
 let lobby: LobbyScreen | null = null;
+let play: PlayScreen | null = null;
 let latestView: LobbyView | null = null;
 
 function toast(level: 'info' | 'warn' | 'error', text: string, ms = 3200): void {
@@ -198,6 +201,7 @@ async function bootApp(): Promise<void> {
 let retryMessage: string | undefined;
 
 function showHome(message?: string): void {
+  teardownPlay();
   latestView = null;
   lobby = null;
   home = renderHome(prefs, loadReconnect() !== null, {
@@ -260,7 +264,34 @@ function showLobby(view: LobbyView, you: PlayerRow | undefined): void {
   lobby.update(view, you);
 }
 
+function showPlay(view: LobbyView): void {
+  if (play) return;
+  home = null;
+  lobby = null;
+  const bridge = {
+    selfId: () => session.selfId,
+    players: () =>
+      (latestView?.players ?? []).map((p) => ({ ...p }) as unknown as PlayerView),
+    sendInput: (seq: number, x: number, y: number) => session.send('input', { seq, x, y }),
+    isPlaying: () => (latestView?.phase ?? '') === 'PLAY',
+  };
+  play = renderPlay({
+    bridge,
+    code: view.code,
+    onLeave: () => void leaveToHome(),
+    onError: (message) => toast('error', message, 5000),
+  });
+  mount(root, play.node);
+  void keepScreenAwake();
+}
+
+function teardownPlay(): void {
+  play?.destroy();
+  play = null;
+}
+
 async function leaveToHome(): Promise<void> {
+  teardownPlay();
   await session.leave();
   showHome();
 }
@@ -268,12 +299,13 @@ async function leaveToHome(): Promise<void> {
 session.setHandlers({
   onState: (view, you) => {
     latestView = view;
-    if (view.phase === 'LOBBY' || view.phase === 'STARTING') {
-      showLobby(view, you);
-    } else {
-      showLobby(view, you);
-      toast('info', 'In-game screen arrives in M2.');
+    if (view.phase === 'PLAY') {
+      showPlay(view);
+      return;
     }
+    // Any other phase (lobby, back-to-lobby, ended) is the lobby screen.
+    teardownPlay();
+    showLobby(view, you);
   },
   onNotice: (notice) => toast(notice.level, notice.text),
   onKicked: (reason) => {
