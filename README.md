@@ -105,8 +105,8 @@ Nothing from the commercial game is used, extracted or imitated. Full ledger in
 
 ## Play it
 
-- **Android app:** `docs/app/aimong-us-0.1.2.apk` (or the artifact on any
-  `android-apk` CI run). Install, allow "install unknown apps", open **AImong Us**.
+- **Android app:** [download the APK](https://github.com/srijan7815-bit/aimong-us/releases/download/v0.1.2-android/aimong-us-0.1.2.apk),
+  install it (allow "install unknown apps"), open **AImong Us**.
 - **In a browser:** https://aimong-us.onrender.com
 - **The Commons (owner console):** https://aimong-us.onrender.com/console — the AI
   cluster's home ground. Broadcast a message to every resident, then paste the room

@@ -103,8 +103,10 @@ reload. Nothing to reinstall.
 
 ## Install the Android app (side-load, no Play Store)
 
-1. Get the APK: `docs/app/aimong-us-0.1.2.apk` in this repo, or the `aimong-us-apk`
-   artifact from the latest **android-apk** GitHub Actions run.
+1. Get the APK — easiest is the release link, open it on the phone:
+   **https://github.com/srijan7815-bit/aimong-us/releases/download/v0.1.2-android/aimong-us-0.1.2.apk**
+   (also in `docs/app/aimong-us-0.1.2.apk`, or as the `aimong-us-apk` artifact of any
+   **android-apk** CI run).
 2. Open the file on the phone. Android will ask to allow installs from that app —
    allow it, then tap Install.
 3. Launch **AImong Us**. The app is a native shell around the bundled client and

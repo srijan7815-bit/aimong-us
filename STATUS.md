@@ -50,6 +50,16 @@ Last updated: 2026-11-01 · Milestone: **M1 + M1.5 COMPLETE and LIVE · next: M2
   - Tests: 27 unit tests (+5 cluster), smoke now 17 checks (was 11).
   - Details: `docs/M1.5-REPORT.md`.
 
+## Live now (M1.5, verified on production 2026-11-01)
+
+- **https://aimong-us.onrender.com/console** — the Commons is deployed. Production
+  run: 7/7 checks (room `M7CUT` created from a phone viewport, broadcast landed in
+  the feed, 4 residents dispatched by team code and badged AI in the lobby, server
+  reported 5 players, everyone home after the room closed).
+- **Android APK:** https://github.com/srijan7815-bit/aimong-us/releases/download/v0.1.2-android/aimong-us-0.1.2.apk
+  (sha256 `fd808672fb0342dfc31b60edc7d70de663e9a1e6835310013e9573e806a61558`, matches
+  `docs/app/aimong-us-0.1.2.apk.sha256`).
+
 ## In progress
 
 - Nothing half-finished; M1 is closed and committed.
