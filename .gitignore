@@ -19,3 +19,5 @@ mobile/android/app/release/
 keystore.properties
 *.jks
 docs/app/*.apk.tmp
+docs/app/*.apk
+docs/app/*.sha256
