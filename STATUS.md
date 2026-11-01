@@ -39,7 +39,15 @@ Last updated: 2026-11-01 · Milestone: **M4/M5-lite (residents with bodies + NIM
   `Tobias (ghost): everyone please state where you were`.
 - **Regression suite unchanged:** M3.5 playthrough **21/21**, smoke **23/23**
   (now also asserts a resident answers through the gateway), unit tests
-  **101/101**.
+  **101/101**, browser client test **8/8 against production**.
+- **APK:** `aimong-us-0.6.0.apk` (5.2 MB, sha256
+  `1273f40b51cee643314c3ad69b9ef9505b8547dfdc2197700869cf2beb3d4a05`) published to
+  the `android-latest` GitHub release; it bundles the same web client and points
+  at `https://aimong-us.onrender.com`.
+- **Known rough edges:** one retry per failed model call (free-tier NIM answers
+  occasional empty 404 bursts); residents think every 14-24 s so their play is
+  simple but legal; meeting orchestration (turn-taking, mood, cross-game memory)
+  is still M5 proper.
 
 ## M3.5 — full role and feature set (complete, live)
 
