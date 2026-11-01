@@ -1,10 +1,14 @@
-/** Local, device-scoped preferences (name, haptics, motion). No accounts. */
+/** Local, device-scoped preferences (name, haptics, motion, look). No accounts. */
+import { DEFAULT_COSMETICS, readCosmetics, type Cosmetics } from '@aimong/shared';
+
 export type HapticsLevel = 'off' | 'light' | 'full';
 
 export interface Prefs {
   name: string;
   haptics: HapticsLevel;
   reduceMotion: boolean;
+  /** Original look-only cosmetics, sent with the join request. */
+  cosmetics: Cosmetics;
 }
 
 const KEY = 'aimong.prefs.v1';
@@ -19,6 +23,7 @@ const defaults = (): Prefs => ({
   name: '',
   haptics: 'vibrate' in navigator ? 'full' : 'off',
   reduceMotion: prefersReducedMotion(),
+  cosmetics: { ...DEFAULT_COSMETICS },
 });
 
 export function loadPrefs(): Prefs {
@@ -26,7 +31,8 @@ export function loadPrefs(): Prefs {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaults();
     const parsed = JSON.parse(raw) as Partial<Prefs>;
-    return { ...defaults(), ...parsed };
+    // A stored profile from an older build may name a hat we no longer ship.
+    return { ...defaults(), ...parsed, cosmetics: readCosmetics(parsed.cosmetics) };
   } catch {
     return defaults();
   }

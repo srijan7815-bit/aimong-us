@@ -15,7 +15,29 @@ export const SettingsState = schema({
   discussionSec: t.number().default(DEFAULT_SETTINGS.discussionSec),
   votingSec: t.number().default(DEFAULT_SETTINGS.votingSec),
   killCooldownSec: t.number().default(DEFAULT_SETTINGS.killCooldownSec),
+  initialKillCooldownSec: t.number().default(DEFAULT_SETTINGS.initialKillCooldownSec),
+  emergencyMeetings: t.number().default(DEFAULT_SETTINGS.emergencyMeetings),
+  emergencyCooldownSec: t.number().default(DEFAULT_SETTINGS.emergencyCooldownSec),
+  playerSpeed: t.number().default(DEFAULT_SETTINGS.playerSpeed),
+  crewVisionTiles: t.number().default(DEFAULT_SETTINGS.crewVisionTiles),
+  impostorVisionTiles: t.number().default(DEFAULT_SETTINGS.impostorVisionTiles),
+  killRange: t.number().default(DEFAULT_SETTINGS.killRange),
+  taskShort: t.number().default(DEFAULT_SETTINGS.taskShort),
+  taskLong: t.number().default(DEFAULT_SETTINGS.taskLong),
+  taskCommon: t.number().default(DEFAULT_SETTINGS.taskCommon),
+  taskVisual: t.number().default(DEFAULT_SETTINGS.taskVisual),
   tasksPerCrew: t.number().default(DEFAULT_SETTINGS.tasksPerCrew),
+  taskBarMode: t.string().default(DEFAULT_SETTINGS.taskBarMode),
+  visualTasks: t.boolean().default(DEFAULT_SETTINGS.visualTasks),
+  anonymousVotes: t.boolean().default(DEFAULT_SETTINGS.anonymousVotes),
+  confirmEjects: t.boolean().default(DEFAULT_SETTINGS.confirmEjects),
+  ghostChat: t.boolean().default(DEFAULT_SETTINGS.ghostChat),
+  chatDuringLightsOut: t.boolean().default(DEFAULT_SETTINGS.chatDuringLightsOut),
+  engineerChance: t.number().default(DEFAULT_SETTINGS.engineerChance),
+  scientistChance: t.number().default(DEFAULT_SETTINGS.scientistChance),
+  guardianChance: t.number().default(DEFAULT_SETTINGS.guardianChance),
+  shapeshifterChance: t.number().default(DEFAULT_SETTINGS.shapeshifterChance),
+  mapId: t.string().default(DEFAULT_SETTINGS.mapId),
   costCapUsd: t.number().default(DEFAULT_SETTINGS.costCapUsd),
   revealEjectedRole: t.boolean().default(DEFAULT_SETTINGS.revealEjectedRole),
   aiAggression: t.number().default(DEFAULT_SETTINGS.aiAggression),
@@ -50,6 +72,24 @@ export const PlayerState = schema({
   emergenciesLeft: t.number().default(1),
   /** Role, revealed only after the match ends (or at the ejection banner). */
   rolePublic: t.string().default('unknown'),
+  // --- M3.5: public side-effects of private abilities ---
+  /** Name other players see while this seat is shifted ('' = their own name). */
+  visibleName: t.string().default(''),
+  /** Epoch ms until the shift animation/effect runs (0 = not shifted). */
+  shiftUntil: t.number().default(0),
+  /** Epoch ms until this player's warden shield expires (0 = unshielded). */
+  shieldUntil: t.number().default(0),
+  /** True while the player is travelling inside the ducts. */
+  venting: t.boolean().default(false),
+  /** Epoch ms until the vent cooldown clears (engineer shown on their own HUD). */
+  ventReadyAt: t.number().default(0),
+  /** Cosmetics: original look-only items (packages/shared/src/cosmetics.ts). */
+  hat: t.string().default('none'),
+  skin: t.string().default('plain'),
+  pet: t.string().default('none'),
+  nameplate: t.string().default('plain'),
+  /** True while a visual task is being performed in public (alibi marker). */
+  visualTaskUntil: t.number().default(0),
 });
 
 /** A body on the floor. Everyone alive can see and report it. */
@@ -121,6 +161,14 @@ export const LobbyState = schema({
   tasksRemaining: t.number().default(0),
   /** Doors locked until (epoch ms). */
   doorsClosedUntil: t.number().default(0),
+  // --- M3.5 ---
+  /** Cameras are "in use" while someone is at the security desk. */
+  cameraInUseBy: t.string().default(''),
+  cameraInUseUntil: t.number().default(0),
+  /** Task bar visibility comes from the host's taskBarMode. */
+  taskBarVisible: t.boolean().default(true),
+  /** Free-roam practice: no roles, no impostors, tasks always available. */
+  practice: t.boolean().default(false),
 });
 
 export type LobbyState = InstanceType<typeof LobbyState>;

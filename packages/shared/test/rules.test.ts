@@ -23,13 +23,16 @@ function seeded(seed: number): () => number {
   };
 }
 
+// Fixtures carry a console `kind`, because the category of a task now comes
+// from what kind of console it is (repair=short, fill=long, tune=common,
+// scan=visual) — that is what keeps the four buckets balanced on the real map.
 const spots = [
-  { id: 'task-a', room: 'medbay' },
-  { id: 'task-b', room: 'reactor' },
-  { id: 'task-c', room: 'galley' },
-  { id: 'task-d', room: 'bridge' },
-  { id: 'task-e', room: 'cargo' },
-  { id: 'task-f', room: 'comms' },
+  { id: 'task-a', room: 'medbay', kind: 'repair' },
+  { id: 'task-b', room: 'reactor', kind: 'repair' },
+  { id: 'task-c', room: 'galley', kind: 'fill' },
+  { id: 'task-d', room: 'bridge', kind: 'repair' },
+  { id: 'task-e', room: 'cargo', kind: 'fill' },
+  { id: 'task-f', room: 'comms', kind: 'tune' },
 ];
 
 describe('roles', () => {
@@ -57,16 +60,21 @@ describe('roles', () => {
 
 describe('tasks', () => {
   it('gives each crew member distinct spots', () => {
-    const tasks = assignTasks(spots, ['a', 'b'], 4, seeded(11));
+    // Categories were added in M3.5, so ask for a plan whose buckets exist in
+    // this small fixture (no spot here is a scan console, so no visual bucket).
+    const tasks = assignTasks(spots, ['a', 'b'], { short: 2, long: 1, common: 0, visual: 0 }, seeded(11));
     for (const list of tasks.values()) {
-      expect(list).toHaveLength(4);
-      expect(new Set(list.map((t) => t.spotId)).size).toBe(4);
+      // A long task is one spot but two minigames; spots stay distinct.
+      expect(list).toHaveLength(3);
+      expect(new Set(list.map((t) => t.spotId)).size).toBe(3);
     }
   });
 
-  it('caps the list at the number of spots that exist', () => {
-    const tasks = assignTasks(spots, ['a'], 99, seeded(1));
-    expect(tasks.get('a')).toHaveLength(spots.length);
+  it('caps the list at the spots that exist, never inventing work', () => {
+    const tasks = assignTasks(spots, ['a'], { short: 99, long: 99, common: 99, visual: 99 }, seeded(1));
+    const list = tasks.get('a') ?? [];
+    expect(list.length).toBeLessThanOrEqual(spots.length);
+    expect(new Set(list.map((t) => t.spotId)).size).toBe(list.length);
   });
 
   it('maps every task spot to one of the twelve minigames, stably', () => {

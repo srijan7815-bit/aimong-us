@@ -237,3 +237,49 @@ touch. Arrow keys stay supported on desktop.
 query string, so the shipped app exposes nothing extra while the acceptance tests
 can see into the page.
 
+
+## 2026-11-01 — M3.5 (roles and the rest of the feature set)
+
+16. **Original role names, mechanics only.** The owner's expansion asks for every
+    role and feature but forbids the commercial game's wording, art and names.
+    So: engineer → **Patch**, scientist → **Watcher**, guardian → **Warden**,
+    shapeshifter → **Shifter**. The behaviour is the closest sane version of the
+    public wiki-level description; the labels, numbers and strings are ours. The
+    role tables live in `game/roles.ts` so the server, the UI, the bots and the
+    prompts can never drift apart.
+17. **Numbers chosen for a phone session.** Patch vents 10 s / 30 s recharge,
+    Watcher 10 s battery / 15 s recharge, Warden 10 s ward / 35 s cooldown / 3
+    tiles, Shifter 10 s / 25 s cooldown. Every one is host-tunable and documented
+    in `ROLE_ABILITY`; the balance sim (M6) will move them, not the code.
+18. **A shift is an event, not state.** The station broadcasts "someone shifted"
+    (that is the tell the genre gives you) and the pod's label follows the
+    server's `visibleName`, so a crewmate can see *that* it happened without ever
+    being handed the shifter's real identity.
+19. **Station tools are room-gated and counted.** Admin table only at Cargo or
+    Bridge, cameras at Observatory or Comms, door log at Comms, four uses each per
+    round. The refusal text is shared (`refusalText`) so the button and the server
+    say the same sentence.
+20. **Chat is a router, not a special case per phase.** `say()` decides: lobby and
+    results = open; meetings = everyone alive; outside meetings = ghosts only;
+    lights-out = nothing unless the host allows it; ghost chat setting can turn the
+    dead channel off. Lobby chat being refused by the first version of this router
+    is exactly why the smoke test exists.
+21. **Cosmetics are code, not assets.** 7 hats, 4 skins, 4 pets, 3 nameplates, all
+    drawn from primitives in Phaser plus a CSS picker, stored on the seat so other
+    people see them. Look-only by construction: the server validates the ids with
+    `readCosmetics` and stores strings; no cosmetic is read by any rule.
+22. **Walking is shared code.** `steerAlongPath` (aim ahead, skip reached nodes,
+    cut a corner only with a clear line) lives in `packages/shared/src/world/path.ts`
+    because the M4 bodies need the same walker the test scripts use. The bug it
+    fixes — a pod shuttling between two tile centres forever — was found by the
+    M3.5 playthrough, not by luck.
+23. **Input sequence numbers are per seat for a whole match.** The server drops
+    out-of-order packets; a script that restarts at 1 for each leg stands still
+    until the counter catches up. The harness now keeps one counter per seat.
+24. **Task categories come from the console, not the spot id.** `taskCategoryForSpot`
+    switches on the console `kind` (repair → short, fill → long, tune → common,
+    scan → visual) so the real map deals 3/3/3/3 and adding a console cannot
+    silently unbalance the categories.
+25. **Tier 2 is deferred, not dropped.** Noisemaker, Tracker, Phantom, the
+    detective role, a second map with ladders/moving platforms and map selection
+    stay on the schedule before M7, as the owner's expansion ordered.

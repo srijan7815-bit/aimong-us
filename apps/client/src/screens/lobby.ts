@@ -5,7 +5,7 @@
  * Re-rendering wholesale would steal focus from the chat box and make typing on
  * a phone miserable.
  */
-import { MAX_CHAT_LEN, defaultImpostors } from '@aimong/shared';
+import { MAX_CHAT_LEN, ROLE_LABEL, defaultImpostors, rolePreview } from '@aimong/shared';
 import { el } from '../lib/dom.js';
 import { podSvg } from '../lib/pod.js';
 import { haptics } from '../lib/haptics.js';
@@ -16,6 +16,8 @@ export interface LobbyCallbacks {
   onLeave: () => void;
   onReady: (ready: boolean) => void;
   onStart: () => void;
+  /** Host starts a solo practice round on this station. */
+  onStartPractice: () => void;
   onSettings: (patch: Partial<SettingsRow>) => void;
   onChat: (text: string) => void;
   onKick: (playerId: string) => void;
@@ -303,6 +305,96 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     ]),
   ]);
 
+  // ---- M3.5: tasks, roles, meeting rules ---------------------------------
+  const toggle = (
+    label: string,
+    sub: string,
+    read: (s: SettingsRow) => boolean,
+    apply: (on: boolean) => Partial<SettingsRow>,
+  ): { node: HTMLElement; sync: (s: SettingsRow) => void } => {
+    const button = el('button', {
+      class: 'toggle',
+      type: 'button',
+      role: 'switch',
+      ariaChecked: 'false',
+      on: {
+        click: () => {
+          if (!view) return;
+          haptics.play('tap');
+          cb.onSettings(apply(!read(view.settings)));
+        },
+      },
+    });
+    const node = el('div', { class: 'setting' }, [
+      el('div', {}, [el('div', { class: 'setting-name', text: label }), el('div', { class: 'setting-sub', text: sub })]),
+      button,
+    ]);
+    return { node, sync: (s) => button.setAttribute('aria-checked', String(read(s))) };
+  };
+
+  const shortStepper = stepper('Short tasks', 'per crewmate', (s) => s.taskShort, (v) => `${v}`, 1, 0, 6, (v) => ({ taskShort: v }));
+  const longStepper = stepper('Long tasks', 'two stages each', (s) => s.taskLong, (v) => `${v}`, 1, 0, 6, (v) => ({ taskLong: v }));
+  const commonStepper = stepper('Common tasks', 'everyone shares', (s) => s.taskCommon, (v) => `${v}`, 1, 0, 4, (v) => ({ taskCommon: v }));
+  const visualStepper = stepper('Visual tasks', 'seen by others', (s) => s.taskVisual, (v) => `${v}`, 1, 0, 4, (v) => ({ taskVisual: v }));
+  const engineerStepper = stepper('Patch chance', 'vent-using crew', (s) => Math.round(s.engineerChance * 100), (v) => `${v}%`, 25, 0, 100, (v) => ({ engineerChance: v / 100 }));
+  const scientistStepper = stepper('Watcher chance', 'handheld vitals', (s) => Math.round(s.scientistChance * 100), (v) => `${v}%`, 25, 0, 100, (v) => ({ scientistChance: v / 100 }));
+  const guardianStepper = stepper('Warden chance', 'wards after death', (s) => Math.round(s.guardianChance * 100), (v) => `${v}%`, 25, 0, 100, (v) => ({ guardianChance: v / 100 }));
+  const shifterStepper = stepper('Shifter chance', 'needs 2 impostors', (s) => Math.round(s.shapeshifterChance * 100), (v) => `${v}%`, 25, 0, 100, (v) => ({ shapeshifterChance: v / 100 }));
+
+  const visualToggle = toggle('Visual tasks public', 'others see your alibi', (s) => s.visualTasks, (on) => ({ visualTasks: on }));
+  const anonToggle = toggle('Anonymous votes', 'hide who voted for whom', (s) => s.anonymousVotes, (on) => ({ anonymousVotes: on }));
+  const confirmToggle = toggle('Confirm ejections', 'say when votes tie', (s) => s.confirmEjects, (on) => ({ confirmEjects: on }));
+  const ghostToggle = toggle('Ghost chat', 'the dead can talk', (s) => s.ghostChat, (on) => ({ ghostChat: on }));
+
+  const barModeBtn = el('button', { class: 'btn btn-ghost small', type: 'button', text: 'Always', on: { click: cycleBarMode } });
+  function cycleBarMode(): void {
+    if (!view) return;
+    const order = ['always', 'meetings', 'never'];
+    const next = order[(order.indexOf(view.settings.taskBarMode) + 1) % order.length] ?? 'always';
+    haptics.play('tap');
+    cb.onSettings({ taskBarMode: next });
+  }
+  const balanceNote = el('p', { class: 'hint' });
+
+  const rolesCard = el('div', { class: 'card' }, [
+    el('div', { class: 'row spread' }, [
+      el('p', { class: 'label', text: 'Tasks & roles' }),
+      el('span', { class: 'chip', text: 'Host only' }),
+    ]),
+    shortStepper.node,
+    longStepper.node,
+    commonStepper.node,
+    visualStepper.node,
+    engineerStepper.node,
+    scientistStepper.node,
+    guardianStepper.node,
+    shifterStepper.node,
+    el('div', { class: 'setting' }, [
+      el('div', {}, [
+        el('div', { class: 'setting-name', text: 'Task bar' }),
+        el('div', { class: 'setting-sub', text: 'when the crew bar is shown' }),
+      ]),
+      barModeBtn,
+    ]),
+    visualToggle.node,
+    anonToggle.node,
+    confirmToggle.node,
+    ghostToggle.node,
+    balanceNote,
+  ]);
+
+  const practiceBtn = el('button', {
+    class: 'btn btn-ghost btn-block',
+    type: 'button',
+    text: 'Start a practice round',
+    on: {
+      click: () => {
+        haptics.play('tap');
+        cb.onStartPractice();
+      },
+    },
+  });
+
   // ---- chat --------------------------------------------------------------
   const chatList = el('div', { class: 'chat' });
   const chatInput = el('input', {
@@ -362,12 +454,13 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     el('div', { class: 'card' }, [el('p', { class: 'label', text: 'Crew on board' }), playersGrid]),
     aiCard,
     settingsCard,
+    rolesCard,
     el('div', { class: 'card' }, [
       el('p', { class: 'label', text: 'Lobby chat' }),
       chatList,
       el('div', { class: 'row' }, [chatInput, chatSend]),
     ]),
-    el('div', { class: 'stack' }, [readyBtn, startBtn, startHint]),
+    el('div', { class: 'stack' }, [readyBtn, startBtn, practiceBtn, startHint]),
     el('div', { class: 'footer-note' }, [
       el('button', {
         class: 'linkish',
@@ -416,6 +509,34 @@ export function renderLobby(cb: LobbyCallbacks): LobbyScreen {
     taskStepper.sync(next.settings);
     costStepper.sync(next.settings);
     revealToggle.setAttribute('aria-checked', String(next.settings.revealEjectedRole));
+    // ---- M3.5 settings ----
+    for (const s of [shortStepper, longStepper, commonStepper, visualStepper, engineerStepper, scientistStepper, guardianStepper, shifterStepper]) {
+      s.sync(next.settings);
+      s.setEnabled(isHost);
+    }
+    for (const t of [visualToggle, anonToggle, confirmToggle, ghostToggle]) t.sync(next.settings);
+    for (const t of [visualToggle.node, anonToggle.node, confirmToggle.node, ghostToggle.node]) {
+      t.style.opacity = isHost ? '1' : '0.55';
+      (t.querySelector('button') as HTMLButtonElement | null)?.toggleAttribute('disabled', !isHost);
+    }
+    const BAR_LABEL: Record<string, string> = { always: 'Always', meetings: 'Meetings', never: 'Never' };
+    barModeBtn.textContent = BAR_LABEL[next.settings.taskBarMode] ?? 'Always';
+    barModeBtn.disabled = !isHost;
+    {
+      // Show the host what this table would actually deal before they launch.
+      const seats = Math.max(next.players.length, next.settings.aiSeats + next.players.filter((p) => !p.isAi).length);
+      const rows = rolePreview(seats, next.settings.impostors, {
+        engineerChance: next.settings.engineerChance,
+        scientistChance: next.settings.scientistChance,
+        guardianChance: next.settings.guardianChance,
+        shapeshifterChance: next.settings.shapeshifterChance,
+      });
+      balanceNote.textContent = `With ${seats} seats: ${rows
+        .filter((r) => r.expected > 0)
+        .map((r) => `${r.label} ${Math.round(r.expected * 100) / 100}`)
+        .join(' · ')}`;
+    }
+    practiceBtn.style.display = isHost ? 'block' : 'none';
     for (const s of [
       seatsStepper,
       aiStepper,

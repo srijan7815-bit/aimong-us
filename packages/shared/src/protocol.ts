@@ -30,11 +30,21 @@ export const ChatText = z
   .transform((s) => s.replace(/[<>]/g, '').trim())
   .pipe(z.string().min(1).max(MAX_CHAT_LEN, `Keep it under ${MAX_CHAT_LEN} characters`));
 
+/** Cosmetics a player can wear. Look-only; the server stores and broadcasts it. */
+export const CosmeticsPatch = z.object({
+  hat: z.string().max(24).optional(),
+  skin: z.string().max(24).optional(),
+  pet: z.string().max(24).optional(),
+  nameplate: z.string().max(24).optional(),
+});
+
 /** Matchmaking options for create / join. */
 export const JoinOptions = z.object({
   name: PlayerName,
   /** Marks the creator as host on create; ignored on join. */
   host: z.boolean().optional(),
+  /** What the seat looks like from the first frame. */
+  cosmetics: CosmeticsPatch.optional(),
 });
 export type JoinOptions = z.infer<typeof JoinOptions>;
 
@@ -56,7 +66,22 @@ export const ClientMessages = {
   emergency: z.object({}),
   taskDone: z.object({ taskId: z.string().min(1).max(80) }),
   fix: z.object({ spotId: z.string().min(1).max(64) }),
-  sabotage: z.object({ kind: z.enum(['lights', 'reactor', 'doors']) }),
+  sabotage: z.object({ kind: z.enum(['lights', 'reactor', 'doors', 'comms', 'o2']) }),
+  // --- M3.5 abilities and station tools ---
+  /** Start an ability: vent, vitals, shield, shift, admin, camera, doorlog. */
+  ability: z.object({
+    id: z.enum(['vent', 'vitals', 'shield', 'shift', 'admin', 'camera', 'doorlog']),
+    /** Warden shield target; shifter disguise target. */
+    target: z.string().min(1).max(64).optional(),
+  }),
+  /** Cancel/stop a running ability (leaving vitals, ending a shift early). */
+  abilityEnd: z.object({ id: z.enum(['vent', 'vitals', 'shield', 'shift', 'admin', 'camera', 'doorlog']) }),
+  /** Free-roam practice: start a solo round with no roles and no impostors. */
+  practice: z.object({}),
+  /** Change what you look like. Allowed in the lobby and mid-round. */
+  cosmetics: CosmeticsPatch,
+  /** Quick-chat chips: the id is a canned phrase, never free text. */
+  quickChat: z.object({ id: z.string().min(1).max(32) }),
   vote: z.object({ target: z.string().min(1).max(64).nullable() }),
   setName: z.object({ name: PlayerName }),
   chat: z.object({ text: ChatText }),
@@ -74,7 +99,26 @@ export const ServerEvents = {
     text: z.string(),
   }),
   kicked: z.object({ reason: z.string() }),
+  /** Private answer to an admin/camera/doorlog request. */
+  tool: z.object({
+    id: z.enum(['admin', 'camera', 'doorlog', 'vitals']),
+    rows: z.array(z.string()),
+  }),
 } as const;
+
+/** Canned quick-chat lines. Ids are stable; the client shows the text. */
+export const QUICK_CHAT: Record<string, string> = {
+  'where-was': 'where was everyone?',
+  'seen-x': 'I saw someone near the body',
+  'on-tasks': 'I was on my tasks',
+  'with-me': 'anyone with me?',
+  'susp': 'that is sus',
+  'skip': 'let us skip',
+  'vote-x': 'vote them out',
+  'clear': 'they are clear, leave them',
+  'safe': 'staying here, come to me',
+  'gg': 'good round either way',
+};
 
 export interface Notice {
   level: 'info' | 'warn' | 'error';
@@ -101,6 +145,17 @@ export interface PlayerView {
   moving: boolean;
   /** Last input sequence the server has applied for this player. */
   seq: number;
+  // --- M3.5: public side-effects of private abilities + cosmetics ---
+  /** Name to draw over this pod; a shifter wears someone else's. */
+  visibleName?: string;
+  shiftUntil?: number;
+  shieldUntil?: number;
+  venting?: boolean;
+  visualTaskUntil?: number;
+  hat?: string;
+  skin?: string;
+  pet?: string;
+  nameplate?: string;
 }
 
 export const Phase = z.enum(['LOBBY', 'STARTING', 'PLAY', 'MEETING', 'END']);

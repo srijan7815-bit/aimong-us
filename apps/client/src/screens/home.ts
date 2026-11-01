@@ -2,7 +2,19 @@
  * Home screen: create a room or join with a 5-character code.
  * Mobile first: one thumb, big targets, paste-friendly code boxes.
  */
-import { APP_NAME, STATION_NAME, MILESTONE, CODE_LENGTH, normalizeCode, isValidCode } from '@aimong/shared';
+import {
+  APP_NAME,
+  STATION_NAME,
+  MILESTONE,
+  CODE_LENGTH,
+  HATS,
+  NAMEPLATES,
+  PETS,
+  SKINS,
+  normalizeCode,
+  isValidCode,
+  type Cosmetics,
+} from '@aimong/shared';
 import { el } from '../lib/dom.js';
 import { brandMarkSvg } from '../lib/pod.js';
 import { haptics } from '../lib/haptics.js';
@@ -11,6 +23,8 @@ import type { Prefs } from '../lib/prefs.js';
 export interface HomeCallbacks {
   onCreate: (name: string) => Promise<void>;
   onJoin: (code: string, name: string) => Promise<void>;
+  /** Free-roam practice: a solo station with every console live. */
+  onPractice: () => Promise<void>;
   onResume: () => Promise<void>;
   onShowHelp: () => void;
   onInstall: () => void;
@@ -34,6 +48,7 @@ export interface HomeScreen {
 export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks): HomeScreen {
   let name = prefs.name;
   let busy = false;
+  let cosmetics: Cosmetics = { ...prefs.cosmetics };
 
   const nameInput = el('input', {
     class: 'input',
@@ -186,7 +201,7 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
       nameInput.focus();
       return;
     }
-    cb.onPrefsChanged({ ...prefs, name: trimmed });
+    cb.onPrefsChanged({ ...prefs, name: trimmed, cosmetics });
     await run(() => cb.onCreate(trimmed));
   }
 
@@ -202,7 +217,7 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
       setError('Codes are 5 characters (no 0, O, 1 or I)');
       return;
     }
-    cb.onPrefsChanged({ ...prefs, name: trimmed });
+    cb.onPrefsChanged({ ...prefs, name: trimmed, cosmetics });
     await run(() => cb.onJoin(code, trimmed));
   }
 
@@ -267,6 +282,76 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
   installedCard.style.display = 'none';
 
   // ---- server state ------------------------------------------------------
+  // ---- cosmetics (look-only; original items) ------------------------------
+  const lookRows: HTMLElement[] = [];
+  function lookRow(
+    label: string,
+    options: ReadonlyArray<{ id: string; name: string }>,
+    field: keyof Cosmetics,
+  ): HTMLElement {
+    const chips = options.map((option) =>
+      el('button', {
+        class: 'look-chip',
+        type: 'button',
+        text: option.name,
+        dataset: { id: option.id },
+        on: {
+          click: () => {
+            haptics.play('tap');
+            cosmetics = { ...cosmetics, [field]: option.id } as Cosmetics;
+            cb.onPrefsChanged({ ...prefs, name: name.trim() || prefs.name, cosmetics });
+            paintLook();
+          },
+        },
+      }),
+    );
+    const row = el('div', { class: 'look-row' }, [
+      el('span', { class: 'look-label', text: label }),
+      el('div', { class: 'look-chips' }, chips),
+    ]);
+    row.dataset.field = field;
+    lookRows.push(row);
+    return row;
+  }
+  function paintLook(): void {
+    for (const row of lookRows) {
+      const field = row.dataset.field as keyof Cosmetics;
+      for (const chip of row.querySelectorAll<HTMLButtonElement>('.look-chip')) {
+        chip.classList.toggle('on', chip.dataset.id === cosmetics[field]);
+      }
+    }
+  }
+  const lookCard = el('div', { class: 'card stack' }, [
+    el('div', { class: 'row spread' }, [
+      el('p', { class: 'label', text: 'Your look' }),
+      el('span', { class: 'chip', text: 'cosmetics' }),
+    ]),
+    lookRow('Hat', HATS, 'hat'),
+    lookRow('Skin', SKINS, 'skin'),
+    lookRow('Pet', PETS, 'pet'),
+    lookRow('Plate', NAMEPLATES, 'nameplate'),
+    el('p', { class: 'hint', text: 'Looks only — nothing here changes the rules.' }),
+  ]);
+  paintLook();
+
+  const practiceBtn = el('button', {
+    class: 'btn btn-ghost btn-block',
+    type: 'button',
+    text: 'Practise alone',
+    on: {
+      click: () => {
+        haptics.play('tap');
+        if (!name.trim()) {
+          setError('Pick a name first');
+          nameInput.focus();
+          return;
+        }
+        cb.onPrefsChanged({ ...prefs, name: name.trim(), cosmetics });
+        void run(() => cb.onPractice());
+      },
+    },
+  });
+
   const serverNote = el('div', { class: 'banner banner-info', role: 'status' });
   serverNote.style.display = 'none';
 
@@ -294,6 +379,8 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
       joinBtn,
     ]),
 
+    lookCard,
+    practiceBtn,
     resumeBtn,
     installCard,
     installedCard,

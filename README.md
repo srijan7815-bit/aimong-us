@@ -7,9 +7,12 @@ alongside AI players that have their own names, personalities and (later) their
 own underlying models. Friends-only: no accounts, no matchmaking, just a 5-letter
 room code.
 
-**Current build: M1 — the lobby works end to end, and it installs on your phone
-as an app.** Movement, tasks, kills, meetings and the AI brains land in M2–M8
-(see `PLAN.md`). The Start button says so instead of pretending.
+**Current build: M3.5 — a full round of the game, with every role and feature,
+and it installs on your phone as an app.** Roles (Patch / Watcher / Warden /
+Shifter), task categories and stages, meetings and voting, station tools, five
+sabotages, free-roam practice and cosmetics all work. The AI brains land in M4–M5
+(see `PLAN.md`); for now AI seats stand still, and the Start button says so
+instead of pretending.
 
 ## It's an app on your phone
 
@@ -48,12 +51,15 @@ pnpm dev        # Vite on :5173 (proxies to the API/WebSocket on :2567) + server
 
 ## Host a game in 5 steps
 
-1. Open the link, type a name, tap **Create room**.
-2. Copy the 5-letter code (or tap **Share**).
-3. Everyone else opens the same link and types the code.
-4. The host sets seats, AI count, timers and the AI cost cap in **Match
-   settings**.
-5. Tap **Start game** (in this build it explains what is coming next).
+1. Open the link, type a name, pick a hat if you like, tap **Create room**.
+2. Copy the 5-letter code (or tap **Share**) — everyone else types it on the home
+   screen.
+3. The host sets seats, timers, task counts and role chances in **Match settings**
+   and **Tasks & roles**; the lobby shows what the table would deal.
+4. Everyone taps **Ready**, the host taps **Start game**.
+5. In the round: drag to walk, tap **Use** at a console, **Report** a body, and the
+   **Emergency** button in the Galley. **Practise alone** on the home screen gives
+   you a solo station with every console live.
 
 ## Deploy (Render, one instance)
 
@@ -149,5 +155,6 @@ Freshping. Two caveats worth knowing:
 | Desktop | `WASD` or arrow keys. |
 | Any | Leave button (top right) returns to the lobby. |
 
-The station is walked in **free roam** for now: movement and fog are real, roles,
-tasks and kills arrive in M3.
+Everything in the round is authoritative on the server: movement prediction, fog,
+kills, tasks and meetings all come from one 20 Hz simulation, and the client only
+draws what it is told.

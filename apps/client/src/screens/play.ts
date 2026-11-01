@@ -8,6 +8,7 @@
 import Phaser from 'phaser';
 import {
   MINIGAME_LABELS,
+  QUICK_CHAT,
   SABOTAGE_SPECS,
   TILE_SIZE,
   WORLD,
@@ -16,13 +17,24 @@ import {
 import { loadAtlasManifest } from '../game/atlas.js';
 import { StationScene, type HudState, type StationBridge } from '../game/scene.js';
 import { openMinigame, type MinigameHandle } from '../game/minigames.js';
+import {
+  createAbilityBar,
+  createRoleCard,
+  createTargetPicker,
+  createTaskBar,
+  createToolSheet,
+  sabotageHints,
+  taskSheet,
+} from './panels.js';
 import { el } from '../lib/dom.js';
-import type { BodyRow, LobbyView, PlayerRow, SecretRow, VerdictRow } from '../net/session.js';
+import type { BodyRow, LobbyView, PlayerRow, SecretRow, ToolRow, VerdictRow } from '../net/session.js';
 
 export interface PlayScreen {
   node: HTMLElement;
   update(view: LobbyView, you: PlayerRow | undefined, secret: SecretRow | null): void;
   setHud(state: HudState): void;
+  /** Answer from the admin table / cameras / door log / vitals. */
+  onTool(tool: ToolRow): void;
   showVerdict(verdict: VerdictRow): void;
   destroy(): void;
 }
@@ -74,6 +86,7 @@ export function renderPlay(options: PlayOptions): PlayScreen {
   const banner = el('div', { class: 'play-banner' });
   const actionBar = el('div', { class: 'play-actions' });
   const taskList = el('div', { class: 'task-panel hidden' });
+  const ghostChat = el('div', { class: 'ghost-chat hidden' });
   const modalHost = el('div', { class: 'mg-host hidden' });
   const meetingHost = el('div', { class: 'meeting-host hidden' });
   const endHost = el('div', { class: 'end-host hidden' });
@@ -149,6 +162,7 @@ export function renderPlay(options: PlayOptions): PlayScreen {
     leave,
     banner,
     taskList,
+    ghostChat,
     actionBar,
     modalHost,
     meetingHost,
@@ -166,6 +180,25 @@ export function renderPlay(options: PlayOptions): PlayScreen {
   let sabotageMenuOpen = false;
   let deviceId: string | null = null;
   let lastPhase = '';
+  let roleCardKey = '';
+
+  // --- M3.5 panels ---------------------------------------------------------
+  const panels = {
+    view: () => latest,
+    me: () => me,
+    secret: () => secret,
+    send: (type: string, payload?: unknown) => options.send(type, payload),
+  };
+  const roleCard = createRoleCard(panels);
+  const abilityBar = createAbilityBar(panels, {
+    onPickTarget: (id) => targetPicker.open(id),
+    onNotice: (text) => options.onError(text),
+  });
+  const targetPicker = createTargetPicker(panels);
+  const taskBar = createTaskBar(panels);
+  const toolSheet = createToolSheet();
+  const cameraChip = el('div', { class: 'camera-chip hidden' });
+  node.append(roleCard.node, abilityBar.node, targetPicker.node, taskBar.node, toolSheet.node, cameraChip);
 
   // --- minigame modal ------------------------------------------------------
   const dbg = (event: string, extra: Record<string, unknown> = {}): void => {
@@ -203,18 +236,14 @@ export function renderPlay(options: PlayOptions): PlayScreen {
 
   // --- task panel ----------------------------------------------------------
   const renderTaskList = (): void => {
-    const tasks = secret?.tasks ?? [];
-    const rows = tasks.map((task) =>
-      el('div', { class: `task-row${task.done ? ' done' : ''}` }, [
-        el('span', { class: 'task-room', text: WORLD.rooms.find((r) => r.id === task.room)?.name ?? task.room }),
-        el('span', { class: 'task-name', text: MINIGAME_LABELS[task.minigame as Minigame] ?? task.minigame }),
-        el('span', { class: 'task-state', text: task.done ? '✓' : '•' }),
-      ]),
-    );
-    taskList.replaceChildren(
-      el('div', { class: 'sheet-title', text: `${tasks.filter((t) => t.done).length} of ${tasks.length} tasks done` }),
-      ...(rows.length > 0 ? rows : [el('div', { class: 'task-row', text: 'No tasks — you are not crew.' })]),
-    );
+    const sheet = taskSheet(secret);
+    // The sheet shows the console's own name where the play list used to; keep
+    // the human label for the row that names the minigame.
+    for (const row of sheet.querySelectorAll('.task-name')) {
+      const key = row.textContent ?? '';
+      row.textContent = MINIGAME_LABELS[key as Minigame] ?? key;
+    }
+    taskList.replaceChildren(sheet);
   };
   taskChip.addEventListener('click', () => {
     renderTaskList();
@@ -386,23 +415,60 @@ export function renderPlay(options: PlayOptions): PlayScreen {
     if (kind) {
       const spec = SABOTAGE_SPECS[kind as keyof typeof SABOTAGE_SPECS];
       const secs = Math.max(0, Math.ceil((latest.sabotage.endsAt - Date.now()) / 1000));
+      const FIX_HINT: Record<string, string> = {
+        reactor: 'Fix it in the Reactor before the station goes.',
+        lights: 'Vision is down. Fix it in Medbay or Reactor.',
+        doors: 'Doors are sealed.',
+        comms: 'Comms are down: no task list, no station tools.',
+        o2: 'Air failure — both consoles, now.',
+      };
       parts.push(
         el('div', { class: `play-note ${spec?.lethal ? 'danger' : 'warn'}` }, [
           el('strong', { text: `${spec?.label ?? kind} · ${secs}s` }),
-          el('span', {
-            text:
-              kind === 'reactor'
-                ? 'Fix it in the Reactor before the station goes.'
-                : kind === 'lights'
-                  ? 'Vision is down. Fix it in Medbay or Reactor.'
-                  : 'Doors are sealed.',
-          }),
+          el('span', { text: FIX_HINT[kind] ?? 'Something is wrong.' }),
         ]),
       );
+      const hints = sabotageHints(panels);
+      if (hints.childElementCount > 0) parts.push(hints);
+    }
+    if (latest.cameraInUseBy && Date.now() < latest.cameraInUseUntil) {
+      const watcher = latest.players.find((p) => p.id === latest!.cameraInUseBy);
+      parts.push(el('div', { class: 'play-note info', text: `Cameras in use${watcher ? ` by ${watcher.name}` : ''}.` }));
+    }
+    if (me.venting) {
+      parts.push(el('div', { class: 'play-note warn', text: 'In the ducts — pick a vent to come out.' }));
+    }
+    if (me.shieldUntil > Date.now()) {
+      parts.push(el('div', { class: 'play-note good', text: `Warded for ${Math.ceil((me.shieldUntil - Date.now()) / 1000)}s.` }));
+    }
+    if (me.shiftUntil > Date.now()) {
+      parts.push(el('div', { class: 'play-note warn', text: `Shifted for ${Math.ceil((me.shiftUntil - Date.now()) / 1000)}s — everyone saw.` }));
     }
     banner.replaceChildren(...parts);
     banner.classList.toggle('hidden', parts.length === 0);
   };
+
+  // --- ghost chat -----------------------------------------------------------
+  // The dead keep talking to each other; the server tags every line "(ghost)" so
+  // a living player can never mistake it for a witness statement.
+  const ghostInput = el('input', {
+    class: 'ghost-input',
+    placeholder: 'Talk to the other ghosts…',
+    maxlength: 120,
+  }) as HTMLInputElement;
+  const ghostSend = (): void => {
+    const text = ghostInput.value.trim();
+    if (!text) return;
+    options.send('chat', { text });
+    ghostInput.value = '';
+  };
+  ghostInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') ghostSend();
+  });
+  ghostChat.append(
+    ghostInput,
+    el('button', { class: 'btn btn-ghost small', type: 'button', text: 'Send', on: { click: ghostSend } }),
+  );
 
   // --- meeting overlay -----------------------------------------------------
   // Built once. Rebuilding the card on every state packet (20 a second) used to
@@ -435,6 +501,22 @@ export function renderPlay(options: PlayOptions): PlayScreen {
     if (ev.key === 'Enter') sendChat();
   });
 
+  // Quick-chat chips: canned lines only, so a phone player can say something
+  // useful in two taps — and so nothing here can be used as free text.
+  const quickChatRow = el(
+    'div',
+    { class: 'quick-chat' },
+    Object.entries(QUICK_CHAT).map(([id, text]) =>
+      el('button', {
+        class: 'quick-chip',
+        type: 'button',
+        text,
+        on: { click: () => options.send('quickChat', { id }) },
+      }),
+    ),
+  );
+  const anonNote = el('div', { class: 'meet-anon' });
+
   const castVote = (target: string | null): void => {
     const voting = latest?.meeting.stage === 'VOTING';
     if (!voting || !me?.alive) return;
@@ -448,11 +530,13 @@ export function renderPlay(options: PlayOptions): PlayScreen {
     el('div', { class: 'meeting-card' }, [
       el('div', { class: 'meet-head' }, [meetTitle, meetTimerEl]),
       meetSubEl,
+      anonNote,
       meetChatList,
       el('div', { class: 'meet-chatbar' }, [
         meetInput,
         el('button', { class: 'meet-send', type: 'button', text: 'Send', on: { click: sendChat } }),
       ]),
+      quickChatRow,
       voteListEl,
       el('div', { class: 'meet-actions' }, [
         el('button', {
@@ -493,6 +577,21 @@ export function renderPlay(options: PlayOptions): PlayScreen {
     meetTitle.textContent = meeting.reason === 'emergency' ? 'Emergency meeting' : 'Body reported';
     meetTimerEl.textContent = `${meeting.stage} · ${secs}s`;
     meetSubEl.textContent = `Called by ${caller} · ${meeting.votesCast}/${meeting.votersAlive} votes in`;
+    const anonymous = latest.settings.anonymousVotes;
+    anonNote.textContent = anonymous
+      ? 'Votes are anonymous — nobody sees who voted for whom.'
+      : 'Votes are public in the tally at the end of the meeting.';
+    // Ghosts talk to ghosts; a lights-out station has no radios unless the host
+    // allowed it. Say which is true instead of silently swallowing the message.
+    const dead = me?.isGhost === true;
+    const lightsOut = latest.sabotage.kind === 'lights' && !latest.settings.chatDuringLightsOut;
+    meetInput.disabled = dead || lightsOut;
+    meetInput.placeholder = dead
+      ? 'Ghosts only — living players cannot hear you'
+      : lightsOut
+        ? 'Radios are dead while the lights are out'
+        : 'Say something…';
+    quickChatRow.classList.toggle('hidden', dead);
 
     const lastLine = latest.chat[latest.chat.length - 1];
     const chatSig = `${latest.chat.length}:${lastLine?.id ?? ''}`;
@@ -510,7 +609,9 @@ export function renderPlay(options: PlayOptions): PlayScreen {
       meetChatList.scrollTop = meetChatList.scrollHeight;
     }
 
-    const voteSig = `${voting}:${alive.map((p) => p.id).join(',')}:${votingChoice}:${me?.alive}`;
+    // With anonymous votes the only thing a seat learns is that its own vote
+    // landed; the others stay blank until the tally.
+    const voteSig = `${voting}:${alive.map((p) => p.id).join(',')}:${votingChoice}:${me?.alive}:${anonymous}`;
     if (voteSig !== lastVoteSig) {
       lastVoteSig = voteSig;
       voteListEl.replaceChildren(
@@ -610,10 +711,26 @@ export function renderPlay(options: PlayOptions): PlayScreen {
       });
   }
 
+  /** Repaint the panels whose content depends on the clock rather than state. */
+  const refreshPanels = (): void => {
+    abilityBar.update();
+    taskBar.update();
+    const inUse = latest && latest.cameraInUseBy && Date.now() < latest.cameraInUseUntil;
+    cameraChip.classList.toggle('hidden', !inUse);
+    if (inUse) {
+      const watcher = latest?.players.find((p) => p.id === latest?.cameraInUseBy);
+      cameraChip.textContent = `Cameras in use${watcher ? ` · ${watcher.name}` : ''}`;
+    }
+    // Ghosts get their own chat bar (the living never see it).
+    const ghost = me?.isGhost === true && latest?.phase === 'PLAY';
+    ghostChat.classList.toggle('hidden', !ghost);
+  };
+
   // Meeting / banner timers need to tick even when no state packet arrived.
   meetingTimer = window.setInterval(() => {
     renderMeeting();
     renderBanner();
+    refreshPanels();
   }, 500);
 
   const screen: PlayScreen = {
@@ -644,10 +761,28 @@ export function renderPlay(options: PlayOptions): PlayScreen {
       if (view.phase === 'END') {
         closeMinigame();
       }
+      // The role card pops once per deal. A fresh secret packet arrives after
+      // every ability, so key it on the role rather than on the packet.
+      if (nextSecret && view.phase === 'PLAY') {
+        if (roleCardKey !== nextSecret.roleId) {
+          roleCardKey = nextSecret.roleId;
+          roleCard.update();
+          roleCard.showFor(5000);
+        } else {
+          roleCard.update();
+        }
+      } else if (view.phase !== 'PLAY') {
+        roleCardKey = '';
+        roleCard.hide();
+      }
       renderMeeting();
       renderBanner();
       renderActions();
       renderEnd();
+      refreshPanels();
+    },
+    onTool(tool) {
+      toolSheet.show(tool);
     },
     setHud(state) {
       roomLabel.textContent = state.roomName;

@@ -58,6 +58,12 @@ interface Pod {
   visor: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   isSelf: boolean;
+  /** Cosmetics drawn over the pod (original shapes, no external art). */
+  hat?: Phaser.GameObjects.Graphics;
+  pet?: Phaser.GameObjects.Graphics;
+  ward?: Phaser.GameObjects.Arc;
+  /** Which cosmetics are currently drawn, so we only rebuild on change. */
+  cosmeticsKey: string;
   /** Remote interpolation buffer. */
   buffer: Array<{ t: number; x: number; y: number }>;
   lastX: number;
@@ -211,6 +217,9 @@ export class StationScene extends Phaser.Scene {
             x: Math.round(pod.container.x),
             y: Math.round(pod.container.y),
             self: pod.isSelf,
+            // Look + state the HUD draws, so a test can check them without art.
+            cosmetics: pod.cosmeticsKey,
+            ward: pod.ward?.visible === true,
           })),
         fps: () => Math.round(this.game.loop.actualFps),
       };
@@ -320,10 +329,12 @@ export class StationScene extends Phaser.Scene {
       visor,
       label,
       isSelf: player.id === this.bridge.selfId(),
+      cosmeticsKey: '',
       buffer: [],
       lastX: player.x,
       lastY: player.y,
     };
+    this.applyCosmetics(pod, player);
     this.pods.set(player.id, pod);
 
     if (pod.isSelf) {
@@ -333,6 +344,112 @@ export class StationScene extends Phaser.Scene {
       label.setColor('#7ce2fe');
     }
     return pod;
+  }
+
+  /**
+   * Cosmetics: hats, skin patterns, pets and nameplates.
+   *
+   * All original, all drawn from primitives — the hat is a couple of filled
+   * shapes, the skin pattern is a translucent stripe/spot overlay, the pet is a
+   * small sprite that trails the pod, and the nameplate is a background strip
+   * behind the name. Nothing here talks to the server.
+   */
+  private applyCosmetics(pod: Pod, player: PlayerView): void {
+    const key = `${player.hat ?? ''}|${player.skin ?? ''}|${player.pet ?? ''}|${player.nameplate ?? ''}`;
+    if (key === pod.cosmeticsKey) return;
+    pod.cosmeticsKey = key;
+
+    // skin: tint the body a little per pattern so it reads at a glance
+    const base = Phaser.Display.Color.HexStringToColor(player.color).color;
+    if (player.skin === 'stripe') pod.body.setTint(base).setAlpha(1);
+    else if (player.skin === 'patched') pod.body.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
+      Phaser.Display.Color.HexStringToColor(player.color),
+      Phaser.Display.Color.HexStringToColor('#ffffff'),
+      100,
+      18,
+    ).color);
+    else if (player.skin === 'freckled') pod.body.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
+      Phaser.Display.Color.HexStringToColor(player.color),
+      Phaser.Display.Color.HexStringToColor('#000000'),
+      100,
+      14,
+    ).color);
+    else pod.body.setTint(base);
+
+    pod.hat?.destroy();
+    pod.hat = undefined;
+    pod.pet?.destroy();
+    pod.pet = undefined;
+
+    const ink = 0x0a0e17;
+    if (player.hat && player.hat !== 'none') {
+      const g = this.add.graphics();
+      const light = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.HexStringToColor(player.color),
+        Phaser.Display.Color.HexStringToColor('#ffffff'),
+        100,
+        45,
+      ).color;
+      switch (player.hat) {
+        case 'beanie':
+          g.fillStyle(light, 1).fillRoundedRect(-9, -18, 18, 7, 3);
+          g.fillStyle(ink, 0.35).fillRect(-9, -12.5, 18, 1.6);
+          break;
+        case 'halo':
+          g.lineStyle(1.6, 0xffe9a8, 0.95).strokeEllipse(0, -19, 18, 5);
+          break;
+        case 'crest':
+          g.fillStyle(light, 1).fillTriangle(-1, -16, 2, -24, 6, -15);
+          break;
+        case 'visor':
+          g.fillStyle(0x14202e, 0.95).fillRoundedRect(-11, -19, 22, 4, 2);
+          g.fillStyle(light, 0.9).fillRect(-11, -15.6, 22, 1.4);
+          break;
+        case 'crown':
+          g.fillStyle(0xffd166, 1);
+          g.fillTriangle(-9, -14, -9, -20, -5, -15);
+          g.fillTriangle(-3, -14, 0, -21, 3, -14);
+          g.fillTriangle(5, -15, 9, -20, 9, -14);
+          g.fillRect(-9, -14.5, 18, 2.6);
+          break;
+        case 'sprout':
+          g.fillStyle(0x63d471, 1).fillEllipse(-3.4, -18, 7, 3.6);
+          g.fillStyle(0x63d471, 1).fillEllipse(3.4, -19.4, 7, 3.6);
+          g.lineStyle(1.2, 0x2f7a3c, 1).lineBetween(0, -13, 0, -18);
+          break;
+        default:
+          break;
+      }
+      g.setDepth(101);
+      pod.container.add(g);
+      pod.hat = g;
+    }
+
+    if (player.pet && player.pet !== 'none') {
+      const g = this.add.graphics();
+      const tint = player.pet === 'drone' ? 0x7ce2fe : player.pet === 'pup' ? 0xffc53d : 0xb0e8ff;
+      g.fillStyle(tint, 0.95);
+      if (player.pet === 'mote') g.fillCircle(0, 0, 1.8);
+      else if (player.pet === 'pup') {
+        g.fillRoundedRect(-3.4, -3, 6.8, 6, 2.4);
+        g.fillStyle(0x0a0e17, 0.8).fillCircle(-1.2, -0.6, 0.7).fillCircle(1.2, -0.6, 0.7);
+      } else {
+        g.lineStyle(1.2, tint, 0.9).strokeCircle(0, 0, 3.4);
+        g.fillStyle(tint, 1).fillCircle(0, 0, 1.4);
+      }
+      // The pet trails behind and below the pod so it never hides the visor.
+      g.setPosition(-13, 12).setDepth(99);
+      pod.container.add(g);
+      pod.pet = g;
+    }
+
+    if (!pod.ward) {
+      pod.ward = this.add.circle(0, 0, 16).setStrokeStyle(1.6, 0x8ce99a, 0.9).setVisible(false);
+      pod.container.addAt(pod.ward, 0);
+    }
+    if (player.nameplate === 'badge') pod.label.setBackgroundColor('rgba(10,14,23,0.6)');
+    else pod.label.setBackgroundColor('rgba(0,0,0,0)');
+    if (player.nameplate === 'underline') pod.label.setPadding(0, 0, 0, 2);
   }
 
   // ------------------------------------------------------------------- update
@@ -456,6 +573,14 @@ export class StationScene extends Phaser.Scene {
       if (!pod) pod = this.addPod(player);
       pod.lastX = player.x;
       pod.lastY = player.y;
+      // A shifter wears the name other players see, which is not necessarily
+      // their own: `visibleName` is the server's answer to "what does this look
+      // like from here", so the label simply follows it.
+      const shown = player.visibleName && player.visibleName !== '' ? player.visibleName : player.name;
+      if (pod.label.text !== shown) pod.label.setText(shown);
+      pod.label.setAlpha(player.venting ? 0.25 : 0.85);
+      if (pod.ward) pod.ward.setVisible((player.shieldUntil ?? 0) > Date.now());
+      this.applyCosmetics(pod, player);
       if (!pod.isSelf) {
         pod.buffer.push({ t: this.time.now, x: player.x, y: player.y });
         // Keep ~1 s of snapshots — enough for a 90 ms interpolation window.

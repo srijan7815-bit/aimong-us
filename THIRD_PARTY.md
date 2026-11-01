@@ -56,6 +56,8 @@ mafia-arena, LieGraph. All MIT. **Zero lines of source copied.**
 | UI styling, icons | in-repo CSS + inline SVG | original | |
 | Fonts | none shipped — system font stack only | n/a | keeps the bundle tiny and licence-free |
 | Map "Halcyon-9" | authored in-repo (Tiled JSON, M2) | original | not derived from any existing map |
+| Cosmetics: 7 hats, 4 skins, 4 pets, 3 nameplates | drawn in-repo from primitives, `apps/client/src/game/scene.ts` + `packages/shared/src/cosmetics.ts` | original | no art files at all |
+| Role names and rules text (Patch, Watcher, Warden, Shifter) | written in-repo, `packages/shared/src/game/roles.ts` | original | mechanics only; no wording, art or names from any commercial game |
 | Audio | to be synthesised in-repo or CC0 (M7) | *pending* | every file gets a row here before it ships |
 
 ## 5. Provider terms (services, not assets)

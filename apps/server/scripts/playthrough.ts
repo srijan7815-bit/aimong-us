@@ -13,12 +13,14 @@
  * scripted bodies (M4) come later. Nothing in this script bypasses the server.
  */
 import { Client } from '@colyseus/sdk';
+import { walkTo, stationGrid } from './lib/walk.js';
 import {
   SABOTAGE_SPECS,
   WORLD,
   computeVisionMask,
   buildGrid,
   findPath,
+  steerAlongPath,
   nextWaypoint,
   type SecretRole,
 } from '@aimong/shared';
@@ -28,7 +30,7 @@ const WS = BASE.replace(/^http/, 'ws');
 const SEATS = Number(process.env.SEATS ?? 7);
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-const grid = buildGrid(WORLD);
+const grid = stationGrid();
 
 interface Seat {
   name: string;
@@ -58,71 +60,6 @@ async function waitFor(predicate: () => boolean, label: string, timeoutMs = 8000
  * Walk a player to a world position by sending real input vectors along an A*
  * path — the same route-following the M4 bodies will use.
  */
-async function walkTo(seat: Seat, x: number, y: number, opts: { stopWithin?: number; timeoutMs?: number } = {}): Promise<void> {
-  const stopWithin = opts.stopWithin ?? 14;
-  const timeoutMs = opts.timeoutMs ?? 40000;
-  const started = Date.now();
-  let seq = 0;
-  let path = findPath(grid, seat.room.state.players.get(seat.room.sessionId)?.x ?? 0, seat.room.state.players.get(seat.room.sessionId)?.y ?? 0, x, y);
-  if (!path) throw new Error(`no path for ${seat.name} to ${x.toFixed(0)},${y.toFixed(0)}`);
-  let best = Infinity;
-  let improvedAt = Date.now();
-  let repathedAt = 0;
-  let sidestep = 0;
-  let slideSign = 1;
-  while (Date.now() - started < timeoutMs) {
-    const player = seat.room.state.players.get(seat.room.sessionId);
-    if (!player) break;
-    const distance = Math.hypot(player.x - x, player.y - y);
-    if (distance < stopWithin) {
-      seq += 1;
-      seat.room.send('input', { seq, x: 0, y: 0 });
-      await wait(60);
-      return;
-    }
-    if (distance < best - 2) {
-      best = distance;
-      improvedAt = Date.now();
-    }
-    // Re-plan every 400 ms: bodies and other pods move, and a stale path is how
-    // a walk wedges itself against a wall or another player.
-    const now = Date.now();
-    if (now - repathedAt > 400) {
-      repathedAt = now;
-      path = findPath(grid, player.x, player.y, x, y) ?? path;
-    }
-    const waypoint = path ? nextWaypoint(path, player.x, player.y) : null;
-    if (!waypoint) {
-      seq += 1;
-      seat.room.send('input', { seq, x: 0, y: 0 });
-      await wait(80);
-      return;
-    }
-    let vx = waypoint.x - player.x;
-    let vy = waypoint.y - player.y;
-    if (now - improvedAt > 1200) {
-      // Wedged: slide sideways for a few ticks, then carry on. Over a slow
-      // link (this runs against Render too) a stall is usually a corner, so
-      // alternate the slide direction instead of repeating the same wall.
-      sidestep = 8;
-      slideSign = -slideSign;
-      improvedAt = now;
-    }
-    if (sidestep > 0) {
-      sidestep -= 1;
-      [vx, vy] = [-vy * slideSign, vx * slideSign];
-      if (Math.hypot(vx, vy) < 0.001) {
-        vx = 1;
-        vy = 0;
-      }
-    }
-    const length = Math.hypot(vx, vy) || 1;
-    seq += 1;
-    seat.room.send('input', { seq, x: vx / length, y: vy / length });
-    await wait(40);
-  }
-  throw new Error(`${seat.name} could not walk to ${x.toFixed(0)},${y.toFixed(0)}`);
-}
 
 function spotCentre(spotId: string): { x: number; y: number } {
   const spot = WORLD.taskSpots.find((s) => s.id === spotId);

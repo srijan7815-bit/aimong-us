@@ -1542,3 +1542,378 @@ body {
   pointer-events: none;
   opacity: 0.35;
 }
+
+/* --------------------------------------------------------------------------
+   M3.5 — roles, abilities, tasks, station tools and cosmetics.
+   Everything here is drawn with CSS + inline SVG; no external assets.
+   -------------------------------------------------------------------------- */
+
+/* --- role card ---------------------------------------------------------- */
+.role-card {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(420px, calc(100vw - 28px));
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(13, 21, 36, 0.97), rgba(9, 14, 24, 0.97));
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.role-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.role-title {
+  font-size: 20px;
+  letter-spacing: 0.2px;
+}
+.role-title[data-role="impostor"],
+.role-title[data-role="shapeshifter"] {
+  color: var(--danger);
+}
+.role-summary {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.role-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.role-number {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text-dim);
+  text-transform: capitalize;
+}
+.role-mates {
+  font-size: 13px;
+  color: var(--warn);
+}
+.role-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* --- ability bar -------------------------------------------------------- */
+.ability-bar {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--tap) + 26px);
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.ability {
+  min-width: 104px;
+  min-height: var(--tap);
+  padding: 7px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: rgba(13, 21, 36, 0.92);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 10px 24px -18px #000;
+}
+.ability[disabled] {
+  opacity: 0.55;
+}
+.ability.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(53, 214, 184, 0.25);
+}
+.ability.ghost {
+  border-color: rgba(124, 226, 254, 0.5);
+}
+.ability-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+.ability-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+.ability[data-ability="vent"] .ability-label {
+  color: var(--warn);
+}
+
+/* --- task sheet --------------------------------------------------------- */
+.task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.task-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.task-chip.done {
+  border-color: var(--good);
+  color: var(--good);
+}
+.task-stage {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: auto;
+  margin-right: 8px;
+}
+.task-stage.full {
+  color: var(--good);
+}
+
+/* --- crew task bar ------------------------------------------------------ */
+.task-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 8px;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(7, 11, 20, 0.72);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.task-bar-track {
+  width: 120px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.task-bar-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--teal), var(--cyan));
+  transition: width 240ms ease;
+}
+
+/* --- station tool sheets ------------------------------------------------ */
+.tool-sheet,
+.target-sheet {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 34;
+  width: min(420px, calc(100vw - 24px));
+  max-height: 46vh;
+  overflow: auto;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgba(9, 14, 24, 0.96);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+}
+.sheet-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.tool-rows,
+.target-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tool-row {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.target-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.target-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.target-dist {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* --- cameras in use ----------------------------------------------------- */
+.camera-chip {
+  position: absolute;
+  left: 12px;
+  top: 44px;
+  z-index: 22;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(229, 72, 77, 0.18);
+  border: 1px solid rgba(229, 72, 77, 0.5);
+  color: #ffc9cc;
+}
+
+/* --- sabotage pointers -------------------------------------------------- */
+.sab-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.sab-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 197, 61, 0.14);
+  border: 1px solid rgba(255, 197, 61, 0.4);
+  color: #ffe3a3;
+}
+.sab-arrow {
+  font-size: 15px;
+  line-height: 1;
+}
+.sab-dist {
+  opacity: 0.7;
+}
+
+/* --- meeting extras ----------------------------------------------------- */
+.meet-anon {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 2px 0 6px;
+}
+.quick-chat {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0 2px;
+  scrollbar-width: none;
+}
+.quick-chat::-webkit-scrollbar {
+  display: none;
+}
+.quick-chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* --- ghost chat --------------------------------------------------------- */
+.ghost-chat {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  z-index: 26;
+  display: flex;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+}
+.ghost-input {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 226, 254, 0.35);
+  background: rgba(7, 11, 20, 0.85);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.play-note.info {
+  border-color: rgba(124, 226, 254, 0.45);
+}
+.play-note.good {
+  border-color: rgba(48, 164, 108, 0.5);
+}
+
+/* --- cosmetics picker --------------------------------------------------- */
+.look-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+.look-label {
+  width: 46px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.look-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.look-chips::-webkit-scrollbar {
+  display: none;
+}
+.look-chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+}
+.look-chip.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(53, 214, 184, 0.16);
+}

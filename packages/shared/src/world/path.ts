@@ -8,6 +8,7 @@
 import { TILE_SIZE } from './types.js';
 import type { Grid } from './world.js';
 import { isSolid } from './world.js';
+import { hasLineOfSight } from './vision.js';
 
 export interface PathNode {
   x: number;
@@ -123,4 +124,52 @@ export function nextWaypoint(
     return head;
   }
   return null;
+}
+
+export interface Steer {
+  /** Unit vector to send as input this tick. */
+  x: number;
+  y: number;
+  /** The node being aimed at (useful for debug drawing). */
+  aim: PathNode;
+}
+
+/**
+ * Turn a path into a single movement input.
+ *
+ * Aiming at the *next* tile centre makes a walker oscillate: the path starts at
+ * the nearest tile, so as soon as the walker drifts past that centre the aim
+ * flips back the way it came and it shuttles in place forever. Aiming a few
+ * nodes ahead ("string pulling") keeps it moving along the corridor instead.
+ */
+export function steerAlongPath(
+  path: PathNode[] | null,
+  x: number,
+  y: number,
+  opts: { reach?: number; lookahead?: number; grid?: Grid } = {},
+): Steer | null {
+  if (!path || path.length === 0) return null;
+  const reach = opts.reach ?? 20;
+  const lookahead = opts.lookahead ?? 3;
+  let index = 0;
+  while (index < path.length - 1 && Math.hypot(path[index]!.x - x, path[index]!.y - y) <= reach) {
+    index++;
+  }
+  let target = Math.min(path.length - 1, index + lookahead);
+  if (opts.grid) {
+    // Cut the corner away: aim at the farthest node we can actually see, so the
+    // walker does not press into the wall between two corridors.
+    for (let candidate = target; candidate > index; candidate--) {
+      if (hasLineOfSight(opts.grid, x, y, path[candidate]!.x, path[candidate]!.y)) {
+        target = candidate;
+        break;
+      }
+    }
+  }
+  const aim = path[target] ?? path[path.length - 1]!;
+  const dx = aim.x - x;
+  const dy = aim.y - y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.5) return { x: 0, y: 0, aim };
+  return { x: dx / length, y: dy / length, aim };
 }

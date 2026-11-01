@@ -18,6 +18,7 @@ import {
   hasLineOfSightReference,
   isSolid,
   maskHas,
+  steerAlongPath,
   roomAt,
   spawnPosition,
   stepPlayer,
@@ -289,5 +290,39 @@ describe('vision', () => {
     const first = computeVisionMask(grid, eye.x, eye.y);
     const second = computeVisionMask(grid, eye.x, eye.y);
     expect(Array.from(second.tiles)).toEqual(Array.from(first.tiles));
+  });
+});
+
+describe('steerAlongPath', () => {
+  const straight = [
+    { x: 0, y: 0 },
+    { x: 32, y: 0 },
+    { x: 64, y: 0 },
+    { x: 96, y: 0 },
+    { x: 128, y: 0 },
+  ];
+
+  it('heads east along a straight corridor', () => {
+    const steer = steerAlongPath(straight, 10, 0);
+    expect(steer).not.toBeNull();
+    expect(steer!.x).toBeGreaterThan(0.9);
+    expect(Math.abs(steer!.y)).toBeLessThan(0.01);
+  });
+
+  it('looks past the node it is standing on instead of turning round', () => {
+    // Standing just past tile 1: without lookahead this aims back west.
+    const steer = steerAlongPath(straight, 40, 0);
+    expect(steer!.x).toBeGreaterThan(0.9);
+    expect(steer!.aim.x).toBeGreaterThan(64);
+  });
+
+  it('returns null for an empty or missing path', () => {
+    expect(steerAlongPath(null, 0, 0)).toBeNull();
+    expect(steerAlongPath([], 0, 0)).toBeNull();
+  });
+
+  it('stops instead of NaN when it is exactly on the aim point', () => {
+    const steer = steerAlongPath([{ x: 5, y: 5 }], 5, 5);
+    expect(steer).toEqual({ x: 0, y: 0, aim: { x: 5, y: 5 } });
   });
 });

@@ -8,6 +8,7 @@ import { APP_NAME, MILESTONE, SHARED_VERSION, STATION_NAME, isValidCode, normali
 import { el, mount } from './lib/dom.js';
 import { haptics } from './lib/haptics.js';
 import { loadPrefs, savePrefs, loadReconnect, type Prefs } from './lib/prefs.js';
+import type { Cosmetics } from '@aimong/shared';
 import { Session, type LobbyView, type PlayerRow } from './net/session.js';
 import { renderHome, type HomeScreen } from './screens/home.js';
 import { renderLobby, type LobbyScreen } from './screens/lobby.js';
@@ -198,6 +199,12 @@ async function bootApp(): Promise<void> {
   }
 }
 
+/** Cosmetics as the wire wants them: plain strings, no classes. */
+function lookOf(prefs: { cosmetics: Cosmetics }): Record<string, string> {
+  const look = prefs.cosmetics;
+  return { hat: look.hat, skin: look.skin, pet: look.pet, nameplate: look.nameplate };
+}
+
 let retryMessage: string | undefined;
 
 function showHome(message?: string): void {
@@ -206,10 +213,15 @@ function showHome(message?: string): void {
   lobby = null;
   home = renderHome(prefs, loadReconnect() !== null, {
     onCreate: async (name) => {
-      await session.createRoom(name);
+      await session.createRoom(name, lookOf(prefs));
     },
     onJoin: async (code, name) => {
-      await session.joinByCode(code, name);
+      await session.joinByCode(code, name, lookOf(prefs));
+    },
+    onPractice: async () => {
+      // Practice is a solo round on the same server: create, then ask for it.
+      await session.createRoom(prefs.name, lookOf(prefs));
+      session.send('practice', {});
     },
     onResume: async () => {
       const ok = await session.tryReconnect();
@@ -220,7 +232,9 @@ function showHome(message?: string): void {
     },
     onShowHelp: helpSheet,
     onPrefsChanged: (next) => {
-      prefs = savePrefs({ name: next.name });
+      prefs = savePrefs({ name: next.name, cosmetics: next.cosmetics });
+      // Only push a live look change when we are actually in a room.
+      if (session.room) session.send('cosmetics', prefs.cosmetics);
     },
     onInstall: () => {
       void (async () => {
@@ -253,6 +267,7 @@ function showLobby(view: LobbyView, you: PlayerRow | undefined): void {
       onLeave: () => void leaveToHome(),
       onReady: (ready) => session.send('ready', { ready }),
       onStart: () => session.send('start', {}),
+      onStartPractice: () => session.send('practice', {}),
       onSettings: (patch) => session.send('settings', { patch }),
       onChat: (text) => session.send('chat', { text }),
       onKick: (playerId) => session.send('kick', { playerId }),
@@ -344,6 +359,9 @@ session.setHandlers({
   onVerdict: (verdict) => {
     play?.showVerdict(verdict);
     toast('info', verdict.text, 5000);
+  },
+  onTool: (tool) => {
+    play?.onTool(tool);
   },
 });
 

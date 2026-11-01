@@ -43,6 +43,19 @@ export interface PlayerRow {
   killReadyAt: number;
   emergenciesLeft: number;
   rolePublic: string;
+  // --- M3.5 ---
+  /** Name to draw over this pod (a shifter wears someone else's). */
+  visibleName: string;
+  shiftUntil: number;
+  shieldUntil: number;
+  venting: boolean;
+  ventReadyAt: number;
+  visualTaskUntil: number;
+  /** Original cosmetics (look-only). */
+  hat: string;
+  skin: string;
+  pet: string;
+  nameplate: string;
 }
 
 export interface ChatRow {
@@ -61,7 +74,29 @@ export interface SettingsRow {
   discussionSec: number;
   votingSec: number;
   killCooldownSec: number;
+  initialKillCooldownSec: number;
+  emergencyMeetings: number;
+  emergencyCooldownSec: number;
+  playerSpeed: number;
+  crewVisionTiles: number;
+  impostorVisionTiles: number;
+  killRange: number;
+  taskShort: number;
+  taskLong: number;
+  taskCommon: number;
+  taskVisual: number;
   tasksPerCrew: number;
+  taskBarMode: string;
+  visualTasks: boolean;
+  anonymousVotes: boolean;
+  confirmEjects: boolean;
+  ghostChat: boolean;
+  chatDuringLightsOut: boolean;
+  engineerChance: number;
+  scientistChance: number;
+  guardianChance: number;
+  shapeshifterChance: number;
+  mapId: string;
   costCapUsd: number;
   revealEjectedRole: boolean;
   aiAggression: number;
@@ -117,13 +152,46 @@ export interface LobbyView {
   result: ResultRow;
   tasksRemaining: number;
   doorsClosedUntil: number;
+  // --- M3.5 ---
+  cameraInUseBy: string;
+  cameraInUseUntil: number;
+  taskBarVisible: boolean;
+  practice: boolean;
 }
 
-/** Private packet: role, team-mates and the task list. Never in public state. */
+/**
+ * Private packet: role, team-mates, ability clocks and the task list. Never in
+ * public state.
+ */
 export interface SecretRow {
   role: 'crew' | 'impostor';
+  /** crewmate | impostor | engineer | scientist | guardian | shapeshifter */
+  roleId: string;
   mates: Array<{ id: string; name: string }>;
-  tasks: Array<{ id: string; spotId: string; room: string; minigame: string; done: boolean }>;
+  tasks: Array<{
+    id: string;
+    spotId: string;
+    room: string;
+    minigame: string;
+    done: boolean;
+    /** short | long | common | visual */
+    category?: string;
+    /** Long tasks run in stages; `stage` is how far along this seat is. */
+    stage?: number;
+    stages?: number;
+  }>;
+  abilities: Array<{ id: string; readyAt: number; activeUntil: number; usesLeft: number }>;
+  /** One-line role name and rules, straight from the shared tables. */
+  label?: string;
+  summary?: string;
+  params?: Record<string, number>;
+  practice?: boolean;
+}
+
+/** Answer to an admin / camera / door-log / vitals request. */
+export interface ToolRow {
+  id: 'admin' | 'camera' | 'doorlog' | 'vitals';
+  rows: string[];
 }
 
 export interface VerdictRow {
@@ -142,6 +210,7 @@ export interface SessionHandlers {
   onReconnect: () => void;
   onSecret?: (secret: SecretRow) => void;
   onVerdict?: (verdict: VerdictRow) => void;
+  onTool?: (tool: ToolRow) => void;
 }
 
 function endpoint(): string {
@@ -165,19 +234,19 @@ export class Session {
     return this.room?.sessionId ?? '';
   }
 
-  async createRoom(name: string): Promise<void> {
-    const room = (await this.client.create('game', { name })) as unknown as Room<LobbyView>;
+  async createRoom(name: string, cosmetics?: Record<string, string>): Promise<void> {
+    const room = (await this.client.create('game', { name, cosmetics })) as unknown as Room<LobbyView>;
     this.attach(room);
   }
 
-  async joinByCode(code: string, name: string): Promise<void> {
+  async joinByCode(code: string, name: string, cosmetics?: Record<string, string>): Promise<void> {
     const res = await fetch(apiUrl(`/api/rooms/${encodeURIComponent(code)}`));
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error ?? 'No station with that code');
     }
     const info = (await res.json()) as { roomId: string };
-    const room = (await this.client.joinById(info.roomId, { name })) as unknown as Room<LobbyView>;
+    const room = (await this.client.joinById(info.roomId, { name, cosmetics })) as unknown as Room<LobbyView>;
     this.attach(room);
   }
 
@@ -205,6 +274,7 @@ export class Session {
       this.handlers?.onSecret?.(secret);
     });
     room.onMessage('verdict', (verdict: VerdictRow) => this.handlers?.onVerdict?.(verdict));
+    room.onMessage('tool', (tool: ToolRow) => this.handlers?.onTool?.(tool));
     room.onMessage('kicked', (payload: { reason: string }) => {
       this.handlers?.onKicked(payload.reason);
       clearReconnect();
@@ -242,6 +312,10 @@ export class Session {
       result: { ...(state.result as ResultRow) },
       tasksRemaining: state.tasksRemaining ?? 0,
       doorsClosedUntil: state.doorsClosedUntil ?? 0,
+      cameraInUseBy: state.cameraInUseBy ?? '',
+      cameraInUseUntil: state.cameraInUseUntil ?? 0,
+      taskBarVisible: state.taskBarVisible !== false,
+      practice: state.practice === true,
     };
     this.handlers?.onState(
       view,

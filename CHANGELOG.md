@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## [0.5.0] — 2026-11-01
+
+### Added
+- **The full role set (M3.5), with original names.** Patch (vent-using crew),
+  Watcher (handheld vitals with a battery), Warden (a post-mortem shield that eats
+  one kill) and Shifter (a disguise impostor everyone sees shift). Role chances
+  are host-tunable; a Shifter needs two impostors.
+- **Task categories and stages.** Short / long / common / visual dealt from a
+  plan, long tasks run two stages at the same console, the crew bar counts steps,
+  visual tasks leave a public alibi marker, ghosts can still finish their list.
+- **Meeting rules:** limited-use emergency button *and* cooldown, anonymous votes,
+  confirm-ejects, reveal-role, ghost chat, no chat during lights-out (setting),
+  kill cooldowns reset, skip and tie = nobody.
+- **Station tools:** admin table (heads per room), security cameras with a public
+  "in use" flag, door log, handheld vitals — all room-gated and limited.
+- **Two more sabotages:** comms (hides the task list and tools) and O2 (two-point,
+  lethal), alongside lights / doors / reactor. Every sabotage now names the
+  consoles it needs.
+- **Free-roam practice round**, quick-chat chips, player colours, and **cosmetics**
+  (7 hats, 4 skins, 4 pets, 3 nameplates — all drawn from primitives, all
+  original) with a picker on the home screen that is saved on the device.
+- **New HUD** (`apps/client/src/screens/panels.ts`): role card, ability bar with
+  live cooldowns and truthful refusals, task sheet with category chips and stage
+  counters, crew task bar that follows the host's mode, tool sheets, target
+  pickers, sabotage direction pointers, ghost chat bar.
+- **Host settings** for all of it: per-category task counts, four role chances,
+  task-bar mode, visual tasks, anonymous votes, confirm ejects, ghost chat — plus
+  a live "what this table would deal" preview.
+- Tests: `apps/server/scripts/playthrough-m35.ts` (21 wire checks),
+  `scripts/m35-client-test.mjs` (8 browser checks), `packages/shared/test/roles.test.ts`
+  (21 unit tests for the role and task rules).
+
+### Fixed
+- Walking scripts shuttled in place: `steerAlongPath` now skips reached nodes and
+  aims ahead with a clear-line test (`packages/shared/src/world/path.ts`).
+- Input sequence numbers restarted on every walk, so the server ignored the first
+  ~1.5 s of each leg; they are now per seat for the whole match.
+- Lobby chat was refused by the new chat router (caught by the smoke test).
+
 ## [0.4.0] — 2026-11-01
 
 ### Added

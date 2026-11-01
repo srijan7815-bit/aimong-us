@@ -49,26 +49,88 @@ export function minigameForSpot(spotId: string): Minigame {
   return MINIGAMES[hash % MINIGAMES.length] as Minigame;
 }
 
+/**
+ * Task lengths. The genre's four buckets, in our own words:
+ *   short  — one quick minigame
+ *   long   — two stages at the same console (the second one is a different game)
+ *   common — every crew member gets this one
+ *   visual — done in a public spot, and anyone nearby sees you do it (an alibi)
+ */
+export const TASK_CATEGORIES = ['short', 'long', 'common', 'visual'] as const;
+export type TaskCategory = (typeof TASK_CATEGORIES)[number];
+
 export interface TaskAssignment {
   /** Unique per player: same spot can be on two crews' lists. */
   id: string;
   spotId: string;
   room: string;
   minigame: Minigame;
+  category: TaskCategory;
+  /** How many stages it takes (long tasks have two). */
+  stages: number;
   done: boolean;
-  /** Optional second stage (a "two-parter"), kept for M3.1 without new fields. */
+  /** Stages completed so far. */
   stage: number;
 }
 
-export function makeTask(spotId: string, room: string, index: number): TaskAssignment {
+/**
+ * Stable category for a map spot, from the *kind of console* it is.
+ *
+ * The station has four console kinds and three of each, which makes the buckets
+ * balanced by construction (3 short, 3 long, 3 common, 3 visual) instead of by
+ * luck — and it is explainable to a player: "the repair consoles are the quick
+ * jobs, the scan consoles are out in the open".
+ */
+export function taskCategoryForSpot(spotId: string, kind = ''): TaskCategory {
+  switch (kind) {
+    case 'repair':
+      return 'short';
+    case 'fill':
+      return 'long';
+    case 'tune':
+      return 'common';
+    case 'scan':
+      return 'visual';
+    default:
+      // No kind (older fixtures, odd map): fall back to the id, stably.
+      if (spotId.includes('scan')) return 'visual';
+      return 'short';
+  }
+}
+
+/** Second-stage minigame for a long task: never the same game twice in a row. */
+export function stageMinigame(spotId: string, stage: number): Minigame {
+  const base = MINIGAMES.indexOf(minigameForSpot(spotId));
+  const offset = stage === 0 ? 0 : 3 + (spotId.length % 4);
+  return MINIGAMES[(base + offset) % MINIGAMES.length] as Minigame;
+}
+
+export function makeTask(
+  spotId: string,
+  room: string,
+  index: number,
+  category: TaskCategory = taskCategoryForSpot(spotId),
+): TaskAssignment {
   return {
     id: `${spotId}#${index}`,
     spotId,
     room,
-    minigame: minigameForSpot(spotId),
+    minigame: stageMinigame(spotId, 0),
+    category,
+    stages: category === 'long' ? 2 : 1,
     done: false,
     stage: 0,
   };
+}
+
+/** How many individual minigames a task costs, for the task bar. */
+export function taskSteps(task: TaskAssignment): number {
+  return Math.max(1, task.stages);
+}
+
+/** Minigame for the stage the player is on (0 = first stage). */
+export function minigameForStage(task: TaskAssignment): Minigame {
+  return stageMinigame(task.spotId, task.stage === 0 ? 0 : 1);
 }
 
 /**
@@ -92,31 +154,87 @@ export function assignRoles(
   return roles;
 }
 
-/** Give every crew member `perPlayer` distinct task spots. */
+export interface TaskPlan {
+  short: number;
+  long: number;
+  common: number;
+  visual: number;
+}
+
+/** Default split: the genre's shape, five tasks per crew. */
+export const DEFAULT_TASK_PLAN: TaskPlan = { short: 2, long: 1, common: 1, visual: 1 };
+
+/**
+ * Give every crew member their task list.
+ *
+ * Common tasks are handed to *everyone* (same spots), the other buckets are
+ * drawn per player so two crew members have different routes.
+ */
 export function assignTasks(
-  spots: Array<{ id: string; room: string }>,
+  spots: Array<{ id: string; room: string; kind?: string }>,
   crewIds: string[],
-  perPlayer: number,
+  plan: number | TaskPlan,
   random: () => number,
 ): Map<string, TaskAssignment[]> {
+  const resolved: TaskPlan =
+    typeof plan === 'number'
+      ? { short: Math.max(0, plan - 3), long: 1, common: 1, visual: 1 }
+      : plan;
+
+  const byCategory = new Map<TaskCategory, Array<{ id: string; room: string }>>();
+  for (const spot of spots) {
+    const category = taskCategoryForSpot(spot.id, spot.kind ?? '');
+    const list = byCategory.get(category) ?? [];
+    list.push({ id: spot.id, room: spot.room });
+    byCategory.set(category, list);
+  }
+
+  // Everyone shares the same common tasks.
+  const commons = shuffleTake(byCategory.get('common') ?? [], resolved.common, random);
+
   const result = new Map<string, TaskAssignment[]>();
   for (const id of crewIds) {
-    const pool = [...spots];
     const picks: TaskAssignment[] = [];
-    const wanted = Math.min(perPlayer, pool.length);
-    for (let i = 0; i < wanted; i++) {
-      const index = Math.floor(random() * pool.length);
-      const [spot] = pool.splice(index, 1);
-      if (spot) picks.push(makeTask(spot.id, spot.room, i));
+    let index = 0;
+    for (const spot of commons) picks.push(makeTask(spot.id, spot.room, index++, 'common'));
+    for (const category of ['short', 'long', 'visual'] as const) {
+      const wanted = resolved[category];
+      const taken = new Set(picks.map((t) => t.spotId));
+      const pool = (byCategory.get(category) ?? []).filter((s) => !taken.has(s.id));
+      for (const spot of shuffleTake(pool, wanted, random)) {
+        picks.push(makeTask(spot.id, spot.room, index++, category));
+      }
     }
     result.set(id, picks);
   }
   return result;
 }
 
+function shuffleTake<T>(pool: T[], count: number, random: () => number): T[] {
+  const copy = [...pool];
+  const out: T[] = [];
+  const wanted = Math.max(0, Math.min(count, copy.length));
+  for (let i = 0; i < wanted; i++) {
+    const index = Math.floor(random() * copy.length);
+    const [picked] = copy.splice(index, 1);
+    if (picked !== undefined) out.push(picked);
+  }
+  return out;
+}
+
+/** Total minigame steps across a task list — what the task bar counts. */
+export function totalSteps(tasks: TaskAssignment[]): number {
+  return tasks.reduce((sum, task) => sum + taskSteps(task), 0);
+}
+
+/** Steps already finished, counting a half-done long task as half. */
+export function doneSteps(tasks: TaskAssignment[]): number {
+  return tasks.reduce((sum, task) => sum + (task.done ? taskSteps(task) : task.stage), 0);
+}
+
 // ---------------------------------------------------------------- sabotages
 
-export const SABOTAGES = ['lights', 'reactor', 'doors'] as const;
+export const SABOTAGES = ['lights', 'reactor', 'doors', 'comms', 'o2'] as const;
 export type SabotageKind = (typeof SABOTAGES)[number];
 
 export interface SabotageSpec {
@@ -128,6 +246,12 @@ export interface SabotageSpec {
   fixSpots: string[];
   /** Impostor win if it is not fixed in time. */
   lethal: boolean;
+  /** Every spot must be fixed (two-point saboteurs), not just one. */
+  twoPoint: boolean;
+  /** Hides the task list and the station tools while it runs. */
+  blocksInfo: boolean;
+  /** Crew vision while it runs, in tiles (0 = unchanged). */
+  visionTiles: number;
 }
 
 export const SABOTAGE_SPECS: Record<SabotageKind, SabotageSpec> = {
@@ -137,6 +261,9 @@ export const SABOTAGE_SPECS: Record<SabotageKind, SabotageSpec> = {
     durationSec: 40,
     fixSpots: ['task-medbay-lights', 'task-reactor-coolant'],
     lethal: false,
+    twoPoint: false,
+    blocksInfo: false,
+    visionTiles: 2.5,
   },
   reactor: {
     kind: 'reactor',
@@ -144,6 +271,9 @@ export const SABOTAGE_SPECS: Record<SabotageKind, SabotageSpec> = {
     durationSec: 45,
     fixSpots: ['task-reactor-rods', 'task-reactor-coolant'],
     lethal: true,
+    twoPoint: true,
+    blocksInfo: false,
+    visionTiles: 0,
   },
   doors: {
     kind: 'doors',
@@ -151,8 +281,38 @@ export const SABOTAGE_SPECS: Record<SabotageKind, SabotageSpec> = {
     durationSec: 12,
     fixSpots: [],
     lethal: false,
+    twoPoint: false,
+    blocksInfo: false,
+    visionTiles: 0,
+  },
+  comms: {
+    kind: 'comms',
+    label: 'Comms blackout',
+    durationSec: 35,
+    // One of the two array consoles brings the link back.
+    fixSpots: ['task-comms-array', 'task-bridge-nav'],
+    lethal: false,
+    twoPoint: false,
+    blocksInfo: true,
+    visionTiles: 0,
+  },
+  o2: {
+    kind: 'o2',
+    label: 'Air failing',
+    durationSec: 35,
+    fixSpots: ['task-galley-tray', 'task-observatory-lens'],
+    lethal: true,
+    twoPoint: true,
+    blocksInfo: false,
+    visionTiles: 0,
   },
 };
+
+/** How many fix spots a sabotage needs before it clears. */
+export function fixesNeeded(spec: SabotageSpec): number {
+  if (spec.fixSpots.length === 0) return 0;
+  return spec.twoPoint ? spec.fixSpots.length : 1;
+}
 
 /** Crew vision radius in tiles while the lights are out. */
 export const DARK_VISION_TILES = 2.5;
@@ -245,12 +405,24 @@ export const TaskMessage = z.object({ taskId: z.string().min(1).max(80) });
 export const SabotageMessage = z.object({ kind: z.enum(SABOTAGES) });
 export const FixMessage = z.object({ spotId: z.string().min(1).max(64) });
 
-/** Private payload a client gets at game start (never in the public state). */
+/**
+ * Private payload a client gets at game start and on every change to their own
+ * hidden information (never in the public state).
+ */
 export interface SecretRole {
+  /** Side for the win conditions: 'crew' | 'impostor'. */
   role: Role;
-  /** Impostor team-mates (also visible to the impostor). */
+  /** Exactly what this seat is (crewmate / engineer / …). */
+  roleId: import('./roles.js').RoleId;
+  /** Impostor team-mates (empty for crew). */
   mates: Array<{ id: string; name: string }>;
   tasks: TaskAssignment[];
-  /** Minigame per task, so the client does not need to recompute. */
+  /** Ability clocks + which abilities this role has, with their numbers. */
+  abilities: Array<{
+    id: import('./abilities.js').AbilityId;
+    readyAt: number;
+    activeUntil: number;
+    usesLeft: number;
+  }>;
   ejected: boolean;
 }

@@ -1,6 +1,6 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M3 (core rules) COMPLETE locally, not yet pushed · next: M4 (scripted bot bodies)**
+Last updated: 2026-11-01 · Milestone: **M3.5 (full role + feature set) COMPLETE, pushed, verified live · next: M4 (scripted bot bodies)**
 
 > **Live app: https://aimong-us.onrender.com** (Render free plan, singapore,
 > service `srv-dbjag6oae00c73dlkek0`, repo `github.com/srijan7815-bit/aimong-us`)
@@ -10,7 +10,30 @@ Last updated: 2026-11-01 · Milestone: **M3 (core rules) COMPLETE locally, not y
 
 ## Done
 
-## M3 — core rules (complete locally)
+## M3.5 — full role and feature set (complete, live)
+
+- **Roles with original names:** Patch (vents), Watcher (handheld vitals), Warden
+  (post-mortem shield), Shifter (disguise), on top of crewmate/impostor. Role
+  chances are host-tunable; the lobby previews what the table would deal.
+- **Everything around a round:** four task categories with two-stage long tasks
+  and a step-counting crew bar, visual-task alibis, ghosts finishing their lists,
+  emergency cooldown, anonymous votes, confirm ejects, ghost chat, a lights-out
+  chat block, station tools (admin table, cameras, door log, vitals), comms and O2
+  sabotages, free-roam practice, quick chat, and original cosmetics
+  (hats/skins/pets/nameplates) with a device-saved picker.
+- **New HUD:** role card, ability bar with live cooldowns and truthful refusals,
+  category chips + stage counters, tool sheets, sabotage pointers, ghost chat.
+- **Measured acceptance:** M3.5 PLAYTHROUGH PASS **21 checks** (8 SDK clients, no
+  role ever in public state), SMOKE PASS **22 checks**, unit tests **93/93**,
+  browser test **PASS 8 checks** (cosmetics → practice → role card → task
+  categories → room-gated tools → admin table).
+- Fixed six real bugs the tests found, two of them in the shared walker (details
+  in `docs/M3.5-REPORT.md`).
+- **Still stand-in:** AI players take seats and roles but stand still; Tier 2 roles
+  (Noisemaker, Tracker, Phantom, detective) and the second map are scheduled
+  before M7.
+
+## M3 — core rules (complete, live)
 
 - Roles, tasks (12 real minigames), kills, bodies, reports, the Galley emergency
   button, discussion → voting → ejection, ghosts, vents, three sabotages and every
