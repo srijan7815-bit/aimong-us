@@ -91,8 +91,12 @@ export async function main(): Promise<void> {
       .list()
       .filter((room) => room.phase === 'LOBBY' && room.players < MAX_PLAYERS)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
+    // Report the host the client actually reached (PUBLIC_URL is unset on the
+    // free plan, and "localhost" in a JSON field is a lie the owner can see).
+    const host = req.get('host') ?? '';
+    const server = host ? `${req.protocol}://${host}` : config.env.PUBLIC_URL;
     res.json({
-      server: config.env.PUBLIC_URL,
+      server,
       // null = no lobby is waiting, so the app should open one.
       room: open ? { code: open.code, roomId: open.roomId, players: open.players } : null,
       busy: registry.size,
