@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [0.6.1] — 2026-11-02
+
+### Changed
+- **One Play button.** The app is already pointed at the game gateway
+  (`aimong-us.onrender.com`), so tapping **Play** puts you in the open station —
+  or opens a new one. Nobody types an address or a 5-letter code to start a game.
+- The code still exists where it earns its keep: the owner console sends AI
+  residents to a specific station by code, and "Joining a specific station?"
+  on the home screen is there for the rare friend-on-another-device case.
+- **A started match is never offered to a newcomer** — `/api/play` only ever
+  returns a lobby that is still in the LOBBY phase and has room, so pressing
+  Play mid-game opens a fresh station instead of dropping you into someone
+  else's round.
+- Removed build/milestone labels from the player-facing UI (home footer, help
+  sheet). Players see the game, not the roadmap.
+
+### Added
+- `GET /api/play` — the gateway's "where should this player go" answer:
+  `{ server, room: { code, roomId, players } | null, busy }`.
+- `scripts/play-flow-test.mjs` — two phone-sized browsers tap Play and must land
+  in the same station (5 checks).
+
+
 ## [0.6.0] — 2026-11-01
 
 ### Added

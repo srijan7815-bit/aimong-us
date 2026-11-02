@@ -327,3 +327,17 @@ can see into the page.
     A single retry after 400 ms covers the transient case; after that the seat
     stays quiet for that tick. A silent resident is better than a hung match, and
     the failure is visible in the console's `failed` counter.
+
+## 2026-11-02 — how players get in
+
+33. **The app connects to the gateway; the player does not paste anything.**
+    `https://aimong-us.onrender.com` is baked into the build, so Play asks the
+    server where to go (`GET /api/play`) and joins the waiting lobby, or creates
+    one. The 5-letter code survives for two jobs only: the owner console needs a
+    stable handle to send residents to a specific match, and a friend on another
+    device can still join a named station on purpose. Rationale: codes are a toll
+    booth on every single game, and the room code was the only thing standing
+    between "open the app" and "you're playing".
+34. **A running match is never offered to a newcomer.** `/api/play` filters on
+    `phase === 'LOBBY'` and free seats, so pressing Play mid-game opens a fresh
+    station instead of dropping a stranger into someone else's round.

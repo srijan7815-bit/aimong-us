@@ -11,7 +11,7 @@ import express from 'express';
 import { WebSocket as WebSocketImpl } from 'ws';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { APP_NAME, MILESTONE, SHARED_VERSION, normalizeCode } from '@aimong/shared';
+import { APP_NAME, MAX_PLAYERS, MILESTONE, SHARED_VERSION, normalizeCode } from '@aimong/shared';
 import { loadConfig } from './config.js';
 import { setAppConfig } from './app-config.js';
 import { createLogger } from './logger.js';
@@ -72,6 +72,30 @@ export async function main(): Promise<void> {
       uptimeSec: Math.round((Date.now() - bootedAt) / 1000),
       brain: llm.description,
       llmCalls: llm.stats.calls,
+    });
+  });
+
+  /**
+   * "Just play": the app connects to this gateway and asks where to go.
+   *
+   * Players never type a code in the normal flow — the app lands them in the
+   * open lobby (or a fresh one). The 5-letter code still exists because the owner
+   * console needs a stable handle to send AI residents to a specific match.
+   */
+  app.get('/api/play', (req, res) => {
+    if (!apiLimiter.take(req.ip ?? 'unknown')) {
+      res.status(429).json({ error: 'slow down' });
+      return;
+    }
+    const open = registry
+      .list()
+      .filter((room) => room.phase === 'LOBBY' && room.players < MAX_PLAYERS)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    res.json({
+      server: config.env.PUBLIC_URL,
+      // null = no lobby is waiting, so the app should open one.
+      room: open ? { code: open.code, roomId: open.roomId, players: open.players } : null,
+      busy: registry.size,
     });
   });
 

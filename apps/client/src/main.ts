@@ -4,7 +4,7 @@
  * this file stays the place where "which screen am I on" is decided.
  */
 import './styles.css';
-import { APP_NAME, MILESTONE, SHARED_VERSION, STATION_NAME, isValidCode, normalizeCode } from '@aimong/shared';
+import { APP_NAME, STATION_NAME, isValidCode, normalizeCode } from '@aimong/shared';
 import { el, mount } from './lib/dom.js';
 import { haptics } from './lib/haptics.js';
 import { loadPrefs, savePrefs, loadReconnect, type Prefs } from './lib/prefs.js';
@@ -73,12 +73,13 @@ function helpSheet(): void {
   openSheet('How to play', [
     el('div', {
       class: 'banner banner-info',
-      text: `${MILESTONE} build: roles, tasks, kills, bodies, reports, meetings, voting, ghosts, vents and sabotage are all live. AI players are still stand-in bodies until M4 gives them a brain.`,
+      text: 'Tap Play and you are in. Everyone on the same station plays together — no codes to type.',
     }),
     el('ul', {}, [
-      el('li', { text: 'One person taps Create room and gets a 5-letter code.' }),
-      el('li', { text: 'Everyone else types the code (or opens the shared link) on their phone.' }),
-      el('li', { text: 'The host picks seats, AI count, timers and the AI cost cap, then launches.' }),
+      el('li', { text: 'Tap Play. You land in the open station, or open a fresh one.' }),
+      el('li', { text: 'The AI crew is already home: the host can send them into your station.' }),
+      el('li', { text: 'The host picks seats, AI count and timers, then launches.' }),
+      el('li', { text: 'Got a 5-letter code from a friend? Use "Joining a specific station?" on the home screen.' }),
       el('li', {
         text: 'Official rules of the genre: crew do tasks, impostors kill and lie, meetings vote someone into space.',
       }),
@@ -112,10 +113,7 @@ function helpSheet(): void {
         }),
       ]),
     ]),
-    el('div', {
-      class: 'footer-note',
-      text: `${APP_NAME} · ${STATION_NAME} · v${SHARED_VERSION} ${MILESTONE}`,
-    }),
+    el('div', { class: 'footer-note', text: `${APP_NAME} · ${STATION_NAME}` }),
   ]);
 }
 
@@ -212,6 +210,11 @@ function showHome(message?: string): void {
   latestView = null;
   lobby = null;
   home = renderHome(prefs, loadReconnect() !== null, {
+    onPlay: async (name) => {
+      // No screen switch happens here: attach() fires the same view callbacks a
+      // code-join does, so Play and Join converge one line later.
+      await session.play(name, lookOf(prefs));
+    },
     onCreate: async (name) => {
       await session.createRoom(name, lookOf(prefs));
     },

@@ -239,6 +239,28 @@ export class Session {
     this.attach(room);
   }
 
+  /**
+   * The default way in: ask the gateway which lobby is open and join it, or open
+   * a new one. No code is typed by the player — the code is only how the owner
+   * console addresses this match afterwards.
+   */
+  async play(name: string, cosmetics?: Record<string, string>): Promise<void> {
+    const open = await fetch(apiUrl('/api/play'))
+      .then((r) => (r.ok ? r.json() : { room: null }))
+      .catch(() => ({ room: null })) as { room: { roomId: string } | null };
+    if (open.room?.roomId) {
+      try {
+        const room = (await this.client.joinById(open.room.roomId, { name, cosmetics })) as unknown as Room<LobbyView>;
+        this.attach(room);
+        return;
+      } catch {
+        // The lobby filled up or closed between the lookup and the join: open one.
+      }
+    }
+    const room = (await this.client.create('game', { name, cosmetics })) as unknown as Room<LobbyView>;
+    this.attach(room);
+  }
+
   async joinByCode(code: string, name: string, cosmetics?: Record<string, string>): Promise<void> {
     const res = await fetch(apiUrl(`/api/rooms/${encodeURIComponent(code)}`));
     if (!res.ok) {

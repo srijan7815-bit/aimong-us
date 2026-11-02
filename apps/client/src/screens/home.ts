@@ -1,11 +1,15 @@
 /**
- * Home screen: create a room or join with a 5-character code.
- * Mobile first: one thumb, big targets, paste-friendly code boxes.
+ * Home screen: one big Play button.
+ *
+ * The app is already pointed at the game gateway, so a player never types an
+ * address or a code: tapping Play lands them in the open station (or opens one).
+ * The 5-letter code still exists underneath — it is how the owner console sends
+ * AI residents to a match, and how a friend on another device can join a
+ * *specific* station if they want to.
  */
 import {
   APP_NAME,
   STATION_NAME,
-  MILESTONE,
   CODE_LENGTH,
   HATS,
   NAMEPLATES,
@@ -18,9 +22,12 @@ import {
 import { el } from '../lib/dom.js';
 import { brandMarkSvg } from '../lib/pod.js';
 import { haptics } from '../lib/haptics.js';
+import { shareBase } from '../net/endpoint.js';
 import type { Prefs } from '../lib/prefs.js';
 
 export interface HomeCallbacks {
+  /** Default path: connect to the gateway and land in the open station. */
+  onPlay: (name: string) => Promise<void>;
   onCreate: (name: string) => Promise<void>;
   onJoin: (code: string, name: string) => Promise<void>;
   /** Free-roam practice: a solo station with every console live. */
@@ -46,6 +53,14 @@ export interface HomeScreen {
 }
 
 export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks): HomeScreen {
+  // Shown as plain text so nobody has to wonder which server they are on.
+  const gatewayHost = (() => {
+    try {
+      return new URL(shareBase()).host;
+    } catch {
+      return shareBase();
+    }
+  })();
   let name = prefs.name;
   let busy = false;
   let cosmetics: Cosmetics = { ...prefs.cosmetics };
@@ -125,10 +140,22 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
       .toUpperCase();
   }
 
-  const createBtn = el('button', {
+  const playBtn = el('button', {
     class: 'btn btn-primary btn-block btn-lg',
     type: 'button',
-    text: 'Create room',
+    text: 'Play',
+    on: {
+      click: () => {
+        haptics.play('tap');
+        void doPlay();
+      },
+    },
+  });
+
+  const createBtn = el('button', {
+    class: 'btn btn-ghost btn-block',
+    type: 'button',
+    text: 'Open a new station',
     on: {
       click: () => {
         haptics.play('tap');
@@ -165,6 +192,7 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
   function syncButtons(): void {
     const readyName = name.trim().length >= 1;
     const readyCode = isValidCode(currentCode());
+    playBtn.disabled = busy || !readyName;
     createBtn.disabled = busy || !readyName;
     joinBtn.disabled = busy || !readyName || !readyCode;
   }
@@ -186,12 +214,24 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
   }
 
   function setBusyLocal(value: boolean, label?: string): void {
-    createBtn.textContent = value && label ? label : 'Create room';
-    if (!value) createBtn.textContent = 'Create room';
+    playBtn.textContent = value && label ? label : 'Play';
+    if (!value) playBtn.textContent = 'Play';
     const spinner = value ? el('span', { class: 'spinner' }) : null;
-    createBtn.querySelector('.spinner')?.remove();
-    if (spinner) createBtn.prepend(spinner);
+    playBtn.querySelector('.spinner')?.remove();
+    if (spinner) playBtn.prepend(spinner);
     syncButtons();
+  }
+
+  /** The default: no code, no address, just the gateway. */
+  async function doPlay(): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError('Pick a name first');
+      nameInput.focus();
+      return;
+    }
+    cb.onPrefsChanged({ ...prefs, name: trimmed, cosmetics });
+    await run(() => cb.onPlay(trimmed));
   }
 
   async function doCreate(): Promise<void> {
@@ -366,17 +406,19 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
 
     el('div', { class: 'card stack' }, [
       el('div', { class: 'field' }, [el('p', { class: 'label', text: 'Your name' }), nameInput]),
-      createBtn,
+      playBtn,
       el('p', {
         class: 'hint',
-        text: 'You get a room code to share. Friends tap the link, type the code, done.',
+        text: `Connects to ${gatewayHost}. You land in the open station with everyone else — no codes to type.`,
       }),
     ]),
 
     el('div', { class: 'card stack' }, [
-      el('p', { class: 'label', text: 'Join a station' }),
+      el('p', { class: 'label', text: 'Joining a specific station?' }),
+      el('p', { class: 'hint', text: 'Most people never need this. Use it when a friend gives you a 5-letter code.' }),
       codeEntry,
       joinBtn,
+      createBtn,
     ]),
 
     lookCard,
@@ -388,7 +430,7 @@ export function renderHome(prefs: Prefs, hasResume: boolean, cb: HomeCallbacks):
     errorNode,
     el('div', { class: 'footer-note' }, [
       helpBtn,
-      el('span', { text: ` · ${MILESTONE} build · station online` }),
+      el('span', { text: ` · ${gatewayHost}` }),
     ]),
   ]);
 

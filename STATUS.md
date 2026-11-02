@@ -1,6 +1,6 @@
 # STATUS.md — where this stands (update every session)
 
-Last updated: 2026-11-01 · Milestone: **M4/M5-lite (residents with bodies + NIM brains) COMPLETE · next: M5 proper (meeting orchestration, mood, memory)**
+Last updated: 2026-11-02 · Milestone: **0.6.1 — one-tap Play, no codes for players; residents with bodies + NIM brains live · next: M5 proper (meeting orchestration, mood, memory)**
 
 > **Live app: https://aimong-us.onrender.com** (Render free plan, singapore,
 > service `srv-dbjag6oae00c73dlkek0`, repo `github.com/srijan7815-bit/aimong-us`)
@@ -9,6 +9,17 @@ Last updated: 2026-11-01 · Milestone: **M4/M5-lite (residents with bodies + NIM
 > same lobby by code — 12/12 PWA checks passing against production.
 
 ## Done
+
+## 0.6.1 — the player never types a code (complete)
+
+- **Play is the front door.** The gateway URL is baked into the build, so Play
+  asks the server where to go (`GET /api/play`) and lands you in the waiting
+  station or opens one. Verified with two phone-sized browsers: both tapped Play,
+  both landed in the same station, same roster (5/5 checks).
+- **A running match is never offered** to a newcomer (verified: an in-play room
+  was skipped in favour of a lobby, then a fresh station is created).
+- The code survives only for the owner console (AI dispatch) and the optional
+  "join a specific station" path; build/milestone labels are gone from the UI.
 
 ## M4 / M5-lite — residents with bodies and NIM voices (complete)
 

@@ -49,18 +49,27 @@ pnpm dev        # Vite on :5173 (proxies to the API/WebSocket on :2567) + server
 | `node --import tsx apps/server/scripts/smoke.ts` | scripted 2-client lobby test against a running server |
 | `pnpm -r build` | production build |
 | `npx playwright install chromium && node scripts/m35-client-test.mjs` | browser test (Playwright is not a repo dependency: Render's build must stay lean) |
+| `node scripts/play-flow-test.mjs` | two phones tap Play and must land in the same station |
 
-## Host a game in 5 steps
+## Play in 5 steps
 
-1. Open the link, type a name, pick a hat if you like, tap **Create room**.
-2. Copy the 5-letter code (or tap **Share**) — everyone else types it on the home
-   screen.
+1. Open the link (or the Android app), type a name, pick a hat if you like, tap
+   **Play**. You are in — the app already knows the gateway, so there is no
+   address and no code to type.
+2. Friends who tap **Play** land in the same station as long as it is still in the
+   lobby. A station fills one round at a time; pressing Play mid-game opens a
+   fresh one.
 3. The host sets seats, timers, task counts and role chances in **Match settings**
    and **Tasks & roles**; the lobby shows what the table would deal.
-4. Everyone taps **Ready**, the host taps **Start game**.
+4. Send the AI crew in from the owner console (`.onrender.com/console`, paste the
+   station code, pick seats), then the host taps **Start game**.
 5. In the round: drag to walk, tap **Use** at a console, **Report** a body, and the
    **Emergency** button in the Galley. **Practise alone** on the home screen gives
    you a solo station with every console live.
+
+A station code is still printed in the lobby — it is how the console addresses
+*this* match, and how someone on another device can join a specific game via
+**Joining a specific station?**
 
 ## Deploy (Render, one instance)
 

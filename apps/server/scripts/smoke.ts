@@ -138,6 +138,13 @@ async function main(): Promise<void> {
   if (gone !== 404) throw new Error(`room should be gone, got ${gone}`);
   checks.push('room disposed when empty, code freed');
 
+  // ------------------------------------------------- "just Play" (no codes)
+  // The app asks the gateway where to go instead of asking the player for a code.
+  const play1 = await fetch(`${BASE}/api/play`).then((r) => r.json());
+  if (!('room' in play1) || typeof play1.server !== 'string')
+    throw new Error('/api/play did not answer with a room slot');
+  checks.push(`gateway answers /api/play (room: ${play1.room ? play1.room.code : 'none yet'})`);
+
   // ---------------------------------------------------- AI cluster (Commons)
   const snap = await fetch(`${BASE}/api/console/snapshot`).then((r) => r.json());
   if (!Array.isArray(snap.residents) || snap.residents.length < 6)
@@ -184,6 +191,11 @@ async function main(): Promise<void> {
   }).then((r) => r.status);
   if (dead !== 404) throw new Error(`dispatch to a missing room should 404, got ${dead}`);
   checks.push('team code rejected when no such room exists');
+
+  const offered = await fetch(`${BASE}/api/play`).then((r) => r.json());
+  if (offered.room?.code !== teamCode)
+    throw new Error(`/api/play should offer the waiting lobby ${teamCode}, got ${offered.room?.code}`);
+  checks.push(`/api/play points a new player at the open station (${offered.room.code})`);
 
   const dispatch = await fetch(`${BASE}/api/console/dispatch`, {
     method: 'POST',
